@@ -459,11 +459,12 @@ class TranslateDialog(QDialog):
             self.setFixedHeight(520)
 
     def _on_glossary(self) -> None:
-        """Mở dialog bảng thuật ngữ.
+        """Mở dialog bảng thuật ngữ."""
+        from src.ui.dialogs.glossary_dialog import GlossaryDialog
 
-        Chưa triển khai — sẽ hoàn thiện ở Step 2.4.
-        """
-        logger.info("Mở dialog bảng thuật ngữ (chưa triển khai).")
+        dialog = GlossaryDialog(self)
+        dialog.exec()
+        logger.info("Đã đóng dialog bảng thuật ngữ.")
 
     def _on_translate(self) -> None:
         """Xử lý khi người dùng bấm nút Dịch."""

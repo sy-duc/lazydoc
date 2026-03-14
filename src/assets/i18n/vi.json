@@ -59,10 +59,25 @@
   "glossary": {
     "title": "Bảng thuật ngữ",
     "language": "Ngôn ngữ",
+    "lang_from": "Ngôn ngữ gốc",
+    "lang_to": "Ngôn ngữ đích",
+    "term_from": "Thuật ngữ gốc",
+    "term_to": "Thuật ngữ đích",
+    "term_from_hint": "Nhập thuật ngữ gốc...",
+    "term_to_hint": "Nhập thuật ngữ đích...",
     "search": "Tìm kiếm...",
     "btn_save": "Lưu",
     "btn_import": "Import CSV",
-    "btn_export": "Export CSV"
+    "btn_export": "Export CSV",
+    "tooltip_edit": "Sửa",
+    "tooltip_delete": "Xóa",
+    "validation_empty": "Vui lòng nhập đầy đủ thuật ngữ gốc và thuật ngữ đích.",
+    "validation_same_lang": "Ngôn ngữ gốc và ngôn ngữ đích không được trùng nhau.",
+    "confirm_delete": "Bạn có chắc muốn xóa thuật ngữ này?",
+    "import_success": "Đã import thành công {count} thuật ngữ.",
+    "import_error": "Lỗi khi đọc file CSV.",
+    "export_success": "Đã export thành công {count} thuật ngữ.",
+    "export_error": "Lỗi khi ghi file CSV."
   },
   "status": {
     "extracting": "Đang trích xuất...",

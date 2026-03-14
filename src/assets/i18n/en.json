@@ -59,10 +59,25 @@
   "glossary": {
     "title": "Glossary",
     "language": "Language",
+    "lang_from": "Source language",
+    "lang_to": "Target language",
+    "term_from": "Source term",
+    "term_to": "Target term",
+    "term_from_hint": "Enter source term...",
+    "term_to_hint": "Enter target term...",
     "search": "Search...",
     "btn_save": "Save",
     "btn_import": "Import CSV",
-    "btn_export": "Export CSV"
+    "btn_export": "Export CSV",
+    "tooltip_edit": "Edit",
+    "tooltip_delete": "Delete",
+    "validation_empty": "Please enter both source and target terms.",
+    "validation_same_lang": "Source and target languages must be different.",
+    "confirm_delete": "Are you sure you want to delete this term?",
+    "import_success": "Successfully imported {count} terms.",
+    "import_error": "Error reading CSV file.",
+    "export_success": "Successfully exported {count} terms.",
+    "export_error": "Error writing CSV file."
   },
   "status": {
     "extracting": "Extracting...",
