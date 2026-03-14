@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "LazyDoc",
-    "title": "LazyDoc — Máy xay tài liệu"
+    "title": "LazyDoc"
   },
   "main": {
     "drag_drop": "Kéo thả file vào đây",

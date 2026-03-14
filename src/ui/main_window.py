@@ -4,13 +4,10 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt, QMimeData, Signal
-from PySide6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent, QIcon
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent
 from PySide6.QtWidgets import (
-    QApplication,
     QHBoxLayout,
-    QLabel,
-    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -74,19 +71,13 @@ class MainWindow(QWidget):
         content_layout.setContentsMargins(16, 12, 16, 12)
         content_layout.setSpacing(10)
 
-        # Phần trên: Blender (drag & drop) + Bảng file
-        top_section = QHBoxLayout()
-        top_section.setSpacing(12)
-
-        # Vùng hoạt ảnh máy xay + drag & drop
+        # Vùng hoạt ảnh máy xay + drag & drop (phía trên)
         self._blender = BlenderArea()
-        top_section.addWidget(self._blender, stretch=1)
+        content_layout.addWidget(self._blender, stretch=2)
 
-        # Bảng danh sách file
+        # Bảng danh sách file (full width bên dưới — cột Ý nghĩa cần nhiều không gian)
         self._file_table = FileTable()
-        top_section.addWidget(self._file_table, stretch=2)
-
-        content_layout.addLayout(top_section, stretch=3)
+        content_layout.addWidget(self._file_table, stretch=3)
 
         # Vùng tóm tắt kết quả
         self._summary_area = SummaryArea()
@@ -159,6 +150,7 @@ class MainWindow(QWidget):
 
         if files:
             self._file_table.add_files(files)
+            self._blender.play_file_drop()
             self.files_added.emit(files)
             logger.info("Đã thêm %d file.", len(files))
 

@@ -1,9 +1,84 @@
 """Toolbar — Thanh công cụ chính của ứng dụng."""
 
-from PySide6.QtCore import Qt, Signal
+import math
+
+from PySide6.QtCore import Qt, Signal, QRectF, QPointF
+from PySide6.QtGui import QPainter, QPen, QColor, QPainterPath
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QWidget
 
 from src.core.i18n import I18nManager
+
+
+class GearButton(QPushButton):
+    """Nút bánh răng cưa vẽ bằng QPainter."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        """Khởi tạo GearButton."""
+        super().__init__(parent)
+        self.setFixedSize(36, 36)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._hovered = False
+
+    def enterEvent(self, event: object) -> None:
+        """Bật trạng thái hover."""
+        self._hovered = True
+        self.update()
+
+    def leaveEvent(self, event: object) -> None:
+        """Tắt trạng thái hover."""
+        self._hovered = False
+        self.update()
+
+    def paintEvent(self, event: object) -> None:
+        """Vẽ icon bánh răng cưa."""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Nền
+        bg = QColor("#585b70") if self._hovered else QColor("#45475a")
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(bg)
+        painter.drawRoundedRect(0, 0, 36, 36, 18, 18)
+
+        # Vẽ bánh răng
+        painter.translate(18, 18)
+        gear_color = QColor("#cdd6f4")
+        painter.setPen(QPen(gear_color, 1.5))
+        painter.setBrush(gear_color)
+
+        # Tạo path bánh răng
+        path = QPainterPath()
+        teeth = 8
+        outer_r = 10.0
+        inner_r = 7.0
+        tooth_width = math.pi / teeth * 0.6
+
+        for i in range(teeth):
+            angle = 2 * math.pi * i / teeth
+            # Điểm ngoài (đỉnh răng)
+            a1 = angle - tooth_width
+            a2 = angle + tooth_width
+            # Điểm trong (chân răng)
+            a3 = angle + math.pi / teeth - tooth_width
+            a4 = angle + math.pi / teeth + tooth_width
+
+            if i == 0:
+                path.moveTo(outer_r * math.cos(a1), outer_r * math.sin(a1))
+
+            path.lineTo(outer_r * math.cos(a1), outer_r * math.sin(a1))
+            path.lineTo(outer_r * math.cos(a2), outer_r * math.sin(a2))
+            path.lineTo(inner_r * math.cos(a3), inner_r * math.sin(a3))
+            path.lineTo(inner_r * math.cos(a4), inner_r * math.sin(a4))
+
+        path.closeSubpath()
+        painter.drawPath(path)
+
+        # Lỗ tâm
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(bg)
+        painter.drawEllipse(QPointF(0, 0), 3.5, 3.5)
+
+        painter.end()
 
 
 class Toolbar(QWidget):
@@ -46,12 +121,9 @@ class Toolbar(QWidget):
 
         layout.addStretch()
 
-        # Nút Setting (icon)
-        self._settings_btn = QPushButton("⚙")
-        self._settings_btn.setObjectName("settingsBtn")
+        # Nút Setting (bánh răng cưa vẽ bằng QPainter)
+        self._settings_btn = GearButton()
         self._settings_btn.setToolTip(self._i18n.t("main.btn_settings"))
-        self._settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._settings_btn.setFixedSize(36, 36)
         self._settings_btn.clicked.connect(self.settings_clicked.emit)
         layout.addWidget(self._settings_btn)
 
@@ -101,16 +173,6 @@ class Toolbar(QWidget):
             }
             #translateBtn:hover {
                 background-color: #74c7ec;
-            }
-            #settingsBtn {
-                background-color: #45475a;
-                color: #cdd6f4;
-                border: none;
-                border-radius: 18px;
-                font-size: 18px;
-            }
-            #settingsBtn:hover {
-                background-color: #585b70;
             }
             #guideBtn, #aboutBtn {
                 background-color: #313244;

@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "LazyDoc",
-    "title": "LazyDoc — Document Blender"
+    "title": "LazyDoc"
   },
   "main": {
     "drag_drop": "Drag & drop files here",
