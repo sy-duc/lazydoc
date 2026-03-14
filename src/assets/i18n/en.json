@@ -1,0 +1,69 @@
+{
+  "app": {
+    "name": "LazyDoc",
+    "title": "LazyDoc — Document Blender"
+  },
+  "main": {
+    "drag_drop": "Drag & drop files here",
+    "btn_grind": "Grind",
+    "btn_translate": "Translate",
+    "btn_settings": "Settings",
+    "btn_guide": "Guide",
+    "btn_about": "About",
+    "btn_stop": "Stop",
+    "col_select": "Select",
+    "col_filename": "Filename",
+    "col_size": "Size",
+    "col_status": "Status",
+    "col_purpose": "Purpose",
+    "col_language": "Language",
+    "col_delete": "Delete",
+    "cost_label": "Cost",
+    "token_label": "Tokens"
+  },
+  "settings": {
+    "title": "API Key Settings",
+    "provider_label": "Current provider",
+    "select_provider": "Select provider",
+    "api_key_label": "API Key",
+    "btn_save": "Save",
+    "btn_cancel": "Cancel",
+    "validation_empty": "Please enter an API key.",
+    "save_success": "API key saved successfully."
+  },
+  "translate": {
+    "title": "Translation",
+    "target_language": "Target language",
+    "btn_glossary": "Glossary",
+    "btn_expand": "Advanced",
+    "btn_translate": "Translate",
+    "btn_stop": "Stop",
+    "domain": "Domain",
+    "style": "Style",
+    "mode": "Translation mode",
+    "mode_default": "Default (offline)",
+    "mode_smart": "Smart (AI)"
+  },
+  "glossary": {
+    "title": "Glossary",
+    "language": "Language",
+    "search": "Search...",
+    "btn_save": "Save",
+    "btn_import": "Import CSV",
+    "btn_export": "Export CSV"
+  },
+  "status": {
+    "extracting": "Extracting...",
+    "analysing": "Analysing...",
+    "blending": "Blending...",
+    "translating": "Translating...",
+    "done": "Done",
+    "error": "Error",
+    "cancelled": "Cancelled"
+  },
+  "error": {
+    "file_not_supported": "File format not supported.",
+    "api_error": "API connection error. Please try again.",
+    "no_api_key": "API key not configured. Please go to Settings."
+  }
+}

@@ -1,0 +1,36 @@
+# GUI Framework
+PySide6>=6.5
+
+# Xử lý file
+openpyxl>=3.1.0
+xlrd>=2.0.0
+python-docx>=1.0.0
+python-pptx>=0.6.21
+pdfplumber>=0.9.0
+PyMuPDF>=1.22.0
+pytesseract>=0.3.10
+Pillow>=10.0.0
+
+# AI Provider SDK
+google-generativeai>=0.5.0
+openai>=1.0.0
+anthropic>=0.25.0
+
+# Dịch offline
+argostranslate>=1.9.0
+
+# Token counting
+tiktoken>=0.5.0
+tokenizers>=0.15.0
+
+# Mã hóa
+cryptography>=41.0.0
+
+# Xác định thư mục hệ thống
+platformdirs>=4.0.0
+
+# Config
+PyYAML>=6.0
+
+# Testing
+pytest>=7.0.0

@@ -1,0 +1,69 @@
+{
+  "app": {
+    "name": "LazyDoc",
+    "title": "LazyDoc — Máy xay tài liệu"
+  },
+  "main": {
+    "drag_drop": "Kéo thả file vào đây",
+    "btn_grind": "Xay",
+    "btn_translate": "Dịch",
+    "btn_settings": "Cài đặt",
+    "btn_guide": "Hướng dẫn",
+    "btn_about": "Thông tin",
+    "btn_stop": "Dừng",
+    "col_select": "Chọn",
+    "col_filename": "Tên file",
+    "col_size": "Kích thước",
+    "col_status": "Trạng thái",
+    "col_purpose": "Ý nghĩa",
+    "col_language": "Ngôn ngữ",
+    "col_delete": "Xóa",
+    "cost_label": "Chi phí",
+    "token_label": "Token"
+  },
+  "settings": {
+    "title": "Cài đặt API Key",
+    "provider_label": "Provider hiện tại",
+    "select_provider": "Chọn provider",
+    "api_key_label": "API Key",
+    "btn_save": "Lưu",
+    "btn_cancel": "Hủy",
+    "validation_empty": "Vui lòng nhập API key.",
+    "save_success": "Đã lưu API key thành công."
+  },
+  "translate": {
+    "title": "Dịch thuật",
+    "target_language": "Ngôn ngữ đích",
+    "btn_glossary": "Bảng thuật ngữ",
+    "btn_expand": "Mở rộng",
+    "btn_translate": "Dịch",
+    "btn_stop": "Dừng",
+    "domain": "Lĩnh vực",
+    "style": "Văn phong",
+    "mode": "Chế độ dịch",
+    "mode_default": "Mặc định (offline)",
+    "mode_smart": "Thông minh (AI)"
+  },
+  "glossary": {
+    "title": "Bảng thuật ngữ",
+    "language": "Ngôn ngữ",
+    "search": "Tìm kiếm...",
+    "btn_save": "Lưu",
+    "btn_import": "Import CSV",
+    "btn_export": "Export CSV"
+  },
+  "status": {
+    "extracting": "Đang trích xuất...",
+    "analysing": "Đang phân tích...",
+    "blending": "Đang xay nhuyễn...",
+    "translating": "Đang dịch...",
+    "done": "Hoàn tất",
+    "error": "Lỗi",
+    "cancelled": "Đã hủy"
+  },
+  "error": {
+    "file_not_supported": "Định dạng file không được hỗ trợ.",
+    "api_error": "Lỗi kết nối API. Vui lòng thử lại.",
+    "no_api_key": "Chưa cấu hình API key. Vui lòng vào Cài đặt."
+  }
+}
