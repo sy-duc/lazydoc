@@ -8,9 +8,12 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from PySide6.QtWidgets import QApplication
+
 from src.core.database import DatabaseManager
 from src.core.config import ConfigManager
 from src.core.i18n import I18nManager
+from src.ui.main_window import MainWindow
 
 # Cấu hình logging
 logging.basicConfig(
@@ -36,7 +39,12 @@ def main() -> None:
     i18n = I18nManager()
     logger.info("I18n đã được khởi tạo (ngôn ngữ: %s).", i18n.current_language)
 
+    # Khởi chạy giao diện
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
     logger.info("LazyDoc khởi động hoàn tất.")
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
