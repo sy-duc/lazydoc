@@ -309,6 +309,8 @@ class TranslateDialog(QDialog):
 
     def _setup_style(self) -> None:
         """Áp dụng stylesheet cho dialog."""
+        arrow_icon = Path(__file__).resolve().parent.parent.parent / "assets" / "icons" / "dropdown_arrow.svg"
+        arrow_url = arrow_icon.as_posix()
         self.setStyleSheet("""
             TranslateDialog {
                 background-color: #11111b;
@@ -357,10 +359,9 @@ class TranslateDialog(QDialog):
             }
             #langCombo::down-arrow, #modeCombo::down-arrow,
             #domainCombo::down-arrow, #styleCombo::down-arrow {
-                image: none;
-                border-left: 4px solid transparent;
-                border-right: 4px solid transparent;
-                border-top: 6px solid #cdd6f4;
+                image: url(__ARROW_URL__);
+                width: 10px;
+                height: 6px;
                 margin-right: 8px;
             }
             #langCombo QAbstractItemView, #modeCombo QAbstractItemView,
@@ -464,7 +465,7 @@ class TranslateDialog(QDialog):
                 color: #a6adc8;
                 font-size: 11px;
             }
-        """)
+        """.replace("__ARROW_URL__", arrow_url))
 
     # --- Slots ---
 
