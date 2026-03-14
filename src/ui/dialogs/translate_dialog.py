@@ -87,7 +87,6 @@ class TranslateDialog(QDialog):
             Qt.WindowType.Dialog
             | Qt.WindowType.FramelessWindowHint
         )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
 
     def _setup_ui(self) -> None:
@@ -312,11 +311,11 @@ class TranslateDialog(QDialog):
         """Áp dụng stylesheet cho dialog."""
         self.setStyleSheet("""
             TranslateDialog {
-                background-color: transparent;
+                background-color: #11111b;
             }
             #panel {
-                background-color: #1e1e2e;
-                border: 1px solid #45475a;
+                background-color: #262640;
+                border: 1px solid #585b70;
                 border-radius: 10px;
             }
             #dialogTitle {
@@ -488,8 +487,19 @@ class TranslateDialog(QDialog):
         """Mở dialog bảng thuật ngữ."""
         from src.ui.dialogs.glossary_dialog import GlossaryDialog
 
+        overlay = QWidget(self)
+        overlay.setObjectName("glossaryOverlay")
+        overlay.setStyleSheet(
+            "#glossaryOverlay { background-color: rgba(0, 0, 0, 120); }"
+        )
+        overlay.setGeometry(self.rect())
+        overlay.show()
+        overlay.raise_()
+
         dialog = GlossaryDialog(self)
         dialog.exec()
+
+        overlay.deleteLater()
         logger.info("Đã đóng dialog bảng thuật ngữ.")
 
     def _on_translate(self) -> None:

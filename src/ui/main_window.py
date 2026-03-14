@@ -176,17 +176,33 @@ class MainWindow(QWidget):
 
     # --- Slots ---
 
+    def _create_overlay(self) -> QWidget:
+        """Tạo lớp phủ tối mờ lên cửa sổ chính khi mở dialog."""
+        overlay = QWidget(self)
+        overlay.setObjectName("dialogOverlay")
+        overlay.setStyleSheet(
+            "#dialogOverlay { background-color: rgba(0, 0, 0, 120); }"
+        )
+        overlay.setGeometry(self.rect())
+        overlay.show()
+        overlay.raise_()
+        return overlay
+
     def _open_settings(self) -> None:
         """Mở dialog cài đặt API Key."""
+        overlay = self._create_overlay()
         dialog = SettingsDialog(self)
         dialog.exec()
+        overlay.deleteLater()
 
     def _open_translate(self) -> None:
         """Mở dialog dịch thuật với các file đã checked."""
         # TODO: Bỏ bypass khi hoàn thiện logic chọn file
+        overlay = self._create_overlay()
         checked_files = self._file_table.get_checked_files()
         dialog = TranslateDialog(checked_files, self)
         dialog.exec()
+        overlay.deleteLater()
 
     # --- Public API ---
 

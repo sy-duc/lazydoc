@@ -55,7 +55,6 @@ class SettingsDialog(QDialog):
             Qt.WindowType.Dialog
             | Qt.WindowType.FramelessWindowHint
         )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
 
     def _setup_ui(self) -> None:
@@ -137,11 +136,11 @@ class SettingsDialog(QDialog):
         """Áp dụng stylesheet cho dialog."""
         self.setStyleSheet("""
             SettingsDialog {
-                background-color: transparent;
+                background-color: #11111b;
             }
             #panel {
-                background-color: #1e1e2e;
-                border: 1px solid #45475a;
+                background-color: #262640;
+                border: 1px solid #585b70;
                 border-radius: 10px;
             }
             #dialogTitle {
