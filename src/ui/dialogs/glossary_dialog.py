@@ -6,10 +6,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QFileDialog,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -54,16 +56,29 @@ class GlossaryDialog(QDialog):
     def _setup_window(self) -> None:
         """Cấu hình dialog."""
         self.setWindowTitle(self._i18n.t("glossary.title"))
-        self.setFixedSize(520, 520)
+        self.setFixedSize(560, 560)
         self.setWindowFlags(
             Qt.WindowType.Dialog
             | Qt.WindowType.FramelessWindowHint
         )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
 
     def _setup_ui(self) -> None:
         """Thiết lập layout và các widget."""
-        layout = QVBoxLayout(self)
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(20, 20, 20, 20)
+
+        self._panel = QWidget()
+        self._panel.setObjectName("panel")
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(40)
+        shadow.setOffset(0, 4)
+        shadow.setColor(QColor(0, 0, 0, 120))
+        self._panel.setGraphicsEffect(shadow)
+        outer_layout.addWidget(self._panel)
+
+        layout = QVBoxLayout(self._panel)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(10)
 
@@ -207,6 +222,9 @@ class GlossaryDialog(QDialog):
         """Áp dụng stylesheet cho dialog."""
         self.setStyleSheet("""
             GlossaryDialog {
+                background-color: transparent;
+            }
+            #panel {
                 background-color: #1e1e2e;
                 border: 1px solid #45475a;
                 border-radius: 10px;

@@ -4,9 +4,11 @@ import logging
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QProgressBar,
@@ -73,19 +75,39 @@ class TranslateDialog(QDialog):
         self._setup_ui()
         self._setup_style()
 
+    # Margin cho shadow effect
+    _SHADOW_MARGIN = 20
+
     def _setup_window(self) -> None:
         """Cấu hình dialog."""
         self.setWindowTitle(self._i18n.t("translate.title"))
-        self.setFixedSize(500, 520)
+        m = self._SHADOW_MARGIN * 2
+        self.setFixedSize(500 + m, 520 + m)
         self.setWindowFlags(
             Qt.WindowType.Dialog
             | Qt.WindowType.FramelessWindowHint
         )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
 
     def _setup_ui(self) -> None:
         """Thiết lập layout và các widget."""
-        layout = QVBoxLayout(self)
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(
+            self._SHADOW_MARGIN, self._SHADOW_MARGIN,
+            self._SHADOW_MARGIN, self._SHADOW_MARGIN,
+        )
+
+        self._panel = QWidget()
+        self._panel.setObjectName("panel")
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(40)
+        shadow.setOffset(0, 4)
+        shadow.setColor(QColor(0, 0, 0, 120))
+        self._panel.setGraphicsEffect(shadow)
+        outer_layout.addWidget(self._panel)
+
+        layout = QVBoxLayout(self._panel)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(12)
 
@@ -290,6 +312,9 @@ class TranslateDialog(QDialog):
         """Áp dụng stylesheet cho dialog."""
         self.setStyleSheet("""
             TranslateDialog {
+                background-color: transparent;
+            }
+            #panel {
                 background-color: #1e1e2e;
                 border: 1px solid #45475a;
                 border-radius: 10px;
@@ -452,11 +477,12 @@ class TranslateDialog(QDialog):
         self._expand_btn.setText(
             f"{arrow} {self._i18n.t('translate.btn_expand')}"
         )
-        # Điều chỉnh kích thước dialog
+        # Điều chỉnh kích thước dialog (cộng thêm shadow margin)
+        m = self._SHADOW_MARGIN * 2
         if expanded:
-            self.setFixedHeight(640)
+            self.setFixedHeight(640 + m)
         else:
-            self.setFixedHeight(520)
+            self.setFixedHeight(520 + m)
 
     def _on_glossary(self) -> None:
         """Mở dialog bảng thuật ngữ."""

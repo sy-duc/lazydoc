@@ -183,16 +183,8 @@ class MainWindow(QWidget):
 
     def _open_translate(self) -> None:
         """Mở dialog dịch thuật với các file đã checked."""
+        # TODO: Bỏ bypass khi hoàn thiện logic chọn file
         checked_files = self._file_table.get_checked_files()
-        if not checked_files:
-            from PySide6.QtWidgets import QMessageBox
-
-            QMessageBox.warning(
-                self,
-                self._i18n.t("translate.title"),
-                self._i18n.t("translate.no_files"),
-            )
-            return
         dialog = TranslateDialog(checked_files, self)
         dialog.exec()
 
