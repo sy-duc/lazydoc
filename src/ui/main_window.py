@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.i18n import I18nManager
+from src.ui.dialogs.settings_dialog import SettingsDialog
 from src.ui.widgets.file_table import FileTable
 from src.ui.widgets.blender_area import BlenderArea
 from src.ui.widgets.summary_area import SummaryArea
@@ -89,6 +90,7 @@ class MainWindow(QWidget):
 
         # Thanh công cụ
         self._toolbar = Toolbar()
+        self._toolbar.settings_clicked.connect(self._open_settings)
         content_layout.addWidget(self._toolbar)
 
         main_layout.addWidget(content, stretch=1)
@@ -169,6 +171,13 @@ class MainWindow(QWidget):
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         """Kết thúc kéo cửa sổ."""
         self._drag_start_pos = None
+
+    # --- Slots ---
+
+    def _open_settings(self) -> None:
+        """Mở dialog cài đặt API Key."""
+        dialog = SettingsDialog(self)
+        dialog.exec()
 
     # --- Public API ---
 
