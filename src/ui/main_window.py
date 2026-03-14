@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 
 from src.core.i18n import I18nManager
 from src.ui.dialogs.settings_dialog import SettingsDialog
+from src.ui.dialogs.translate_dialog import TranslateDialog
 from src.ui.widgets.file_table import FileTable
 from src.ui.widgets.blender_area import BlenderArea
 from src.ui.widgets.summary_area import SummaryArea
@@ -91,6 +92,7 @@ class MainWindow(QWidget):
         # Thanh công cụ
         self._toolbar = Toolbar()
         self._toolbar.settings_clicked.connect(self._open_settings)
+        self._toolbar.translate_clicked.connect(self._open_translate)
         content_layout.addWidget(self._toolbar)
 
         main_layout.addWidget(content, stretch=1)
@@ -177,6 +179,21 @@ class MainWindow(QWidget):
     def _open_settings(self) -> None:
         """Mở dialog cài đặt API Key."""
         dialog = SettingsDialog(self)
+        dialog.exec()
+
+    def _open_translate(self) -> None:
+        """Mở dialog dịch thuật với các file đã checked."""
+        checked_files = self._file_table.get_checked_files()
+        if not checked_files:
+            from PySide6.QtWidgets import QMessageBox
+
+            QMessageBox.warning(
+                self,
+                self._i18n.t("translate.title"),
+                self._i18n.t("translate.no_files"),
+            )
+            return
+        dialog = TranslateDialog(checked_files, self)
         dialog.exec()
 
     # --- Public API ---
