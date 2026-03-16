@@ -71,33 +71,34 @@ class FileTable(QWidget):
         self._table = QTableWidget(0, NUM_COLUMNS)
         self._table.setObjectName("fileTable")
 
-        # Thiết lập header
+        # Thiết lập header — bỏ label cho cột checkbox và xóa
         headers = [
-            self._i18n.t("main.col_select"),
+            "",
             self._i18n.t("main.col_filename"),
             self._i18n.t("main.col_size"),
             self._i18n.t("main.col_status"),
             self._i18n.t("main.col_purpose"),
             self._i18n.t("main.col_language"),
-            self._i18n.t("main.col_delete"),
+            "",
         ]
         self._table.setHorizontalHeaderLabels(headers)
 
         # Cấu hình header
         header = self._table.horizontalHeader()
         header.setSectionResizeMode(COL_SELECT, QHeaderView.ResizeMode.Fixed)
-        header.setSectionResizeMode(COL_FILENAME, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(COL_FILENAME, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(COL_SIZE, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(COL_STATUS, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(COL_PURPOSE, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(COL_LANGUAGE, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(COL_DELETE, QHeaderView.ResizeMode.Fixed)
 
-        self._table.setColumnWidth(COL_SELECT, 40)
-        self._table.setColumnWidth(COL_SIZE, 80)
-        self._table.setColumnWidth(COL_STATUS, 70)
-        self._table.setColumnWidth(COL_LANGUAGE, 70)
-        self._table.setColumnWidth(COL_DELETE, 40)
+        self._table.setColumnWidth(COL_SELECT, 32)
+        self._table.setColumnWidth(COL_FILENAME, 150)
+        self._table.setColumnWidth(COL_SIZE, 70)
+        self._table.setColumnWidth(COL_STATUS, 60)
+        self._table.setColumnWidth(COL_LANGUAGE, 60)
+        self._table.setColumnWidth(COL_DELETE, 32)
 
         # Cấu hình bảng
         self._table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
@@ -192,8 +193,13 @@ class FileTable(QWidget):
         checkbox_layout.addWidget(checkbox)
         self._table.setCellWidget(row, COL_SELECT, checkbox_widget)
 
-        # Tên file
-        name_item = QTableWidgetItem(path.name)
+        # Tên file (cắt ngắn nếu quá dài, tooltip hiển thị đầy đủ)
+        display_name = path.name
+        if len(display_name) > 20:
+            stem = path.stem
+            suffix = path.suffix
+            display_name = stem[:16] + "..." + suffix
+        name_item = QTableWidgetItem(display_name)
         name_item.setToolTip(str(path))
         self._table.setItem(row, COL_FILENAME, name_item)
 

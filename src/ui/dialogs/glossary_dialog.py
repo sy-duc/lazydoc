@@ -278,6 +278,9 @@ class GlossaryDialog(QDialog):
                 border: 1px solid #313244;
                 border-radius: 6px;
             }
+            #entryScroll QWidget {
+                background-color: #181825;
+            }
             #entryRow {
                 background-color: transparent;
             }

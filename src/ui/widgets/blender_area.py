@@ -19,12 +19,14 @@ from PySide6.QtCore import (
     QPointF,
     Qt,
     QTimer,
+    Signal,
 )
 from PySide6.QtGui import (
     QBrush,
     QColor,
     QFont,
     QLinearGradient,
+    QMouseEvent,
     QPainter,
     QPainterPath,
     QPen,
@@ -36,6 +38,9 @@ from src.core.i18n import I18nManager
 
 class BlenderArea(QWidget):
     """Vùng hiển thị hoạt ảnh máy xay tài liệu + khu vực kéo thả file."""
+
+    # Signal khi click vào thân máy xay (trigger extract)
+    body_clicked = Signal()
 
     # Trạng thái máy xay
     STATE_IDLE = "idle"
@@ -57,7 +62,8 @@ class BlenderArea(QWidget):
         self._file_drop_y = 0.0  # vị trí file rơi vào phễu
 
         self.setObjectName("blenderArea")
-        self.setMinimumHeight(200)
+        self.setMinimumHeight(160)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
 
         self._setup_animations()
 
@@ -321,6 +327,14 @@ class BlenderArea(QWidget):
             painter.setFont(font)
             painter.setPen(QPen(QColor("#a6e3a1")))
             painter.drawText(QRectF(0, h - 30, w, 24), Qt.AlignmentFlag.AlignCenter, self._status_text)
+
+    # --- Mouse events ---
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        """Click vào thân máy xay → emit signal extract."""
+        if event.button() == Qt.MouseButton.LeftButton and self._state != self.STATE_PROCESSING:
+            self.body_clicked.emit()
+        super().mousePressEvent(event)
 
     # --- Public API ---
 

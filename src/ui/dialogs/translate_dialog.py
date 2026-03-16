@@ -335,6 +335,9 @@ class TranslateDialog(QDialog):
                 border: 1px solid #313244;
                 border-radius: 6px;
             }
+            #fileScroll QWidget {
+                background-color: #181825;
+            }
             #fileItem {
                 color: #cdd6f4;
                 font-size: 12px;

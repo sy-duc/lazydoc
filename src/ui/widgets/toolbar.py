@@ -105,8 +105,8 @@ class Toolbar(QWidget):
         layout.setContentsMargins(0, 4, 0, 4)
         layout.setSpacing(8)
 
-        # Nút Xay (primary action)
-        self._grind_btn = QPushButton(f"⚡ {self._i18n.t('main.btn_grind')}")
+        # Nút Summary (tổng hợp AI)
+        self._grind_btn = QPushButton(f"📋 {self._i18n.t('main.btn_summary')}")
         self._grind_btn.setObjectName("grindBtn")
         self._grind_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._grind_btn.clicked.connect(self.grind_clicked.emit)

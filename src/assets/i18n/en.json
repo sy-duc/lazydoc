@@ -6,6 +6,7 @@
   "main": {
     "drag_drop": "Drag & drop files here",
     "btn_grind": "Grind",
+    "btn_summary": "Summary",
     "btn_translate": "Translate",
     "btn_settings": "Settings",
     "btn_guide": "Guide",

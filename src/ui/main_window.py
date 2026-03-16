@@ -83,15 +83,16 @@ class MainWindow(QWidget):
 
         # Vùng hoạt ảnh máy xay + drag & drop (phía trên)
         self._blender = BlenderArea()
-        content_layout.addWidget(self._blender, stretch=2)
+        content_layout.addWidget(self._blender, stretch=1)
 
-        # Bảng danh sách file (full width bên dưới — cột Ý nghĩa cần nhiều không gian)
+        # Bảng danh sách file (ẩn ban đầu, hiển thị khi có file)
         self._file_table = FileTable()
+        self._file_table.setVisible(False)
         content_layout.addWidget(self._file_table, stretch=3)
 
         # Vùng tóm tắt kết quả
         self._summary_area = SummaryArea()
-        content_layout.addWidget(self._summary_area, stretch=2)
+        content_layout.addWidget(self._summary_area, stretch=3)
 
         # Vùng theo dõi chi phí
         self._cost_tracker = CostTracker()
@@ -102,6 +103,7 @@ class MainWindow(QWidget):
         self._toolbar.settings_clicked.connect(self._open_settings)
         self._toolbar.translate_clicked.connect(self._open_translate)
         self._toolbar.grind_clicked.connect(self._on_grind)
+        self._blender.body_clicked.connect(self._on_grind)
         content_layout.addWidget(self._toolbar)
 
         main_layout.addWidget(content, stretch=1)
@@ -170,6 +172,7 @@ class MainWindow(QWidget):
 
         if files:
             self._file_table.add_files(files)
+            self._file_table.setVisible(True)
             self._blender.play_file_drop()
             self.files_added.emit(files)
             logger.info("Đã thêm %d file.", len(files))
@@ -205,6 +208,7 @@ class MainWindow(QWidget):
 
         # Xóa cache khi file bị xóa khỏi bảng
         self._file_table.file_removed.connect(self._extract_module.invalidate)
+        self._file_table.file_removed.connect(self._on_file_removed)
 
     # --- Slots ---
 
@@ -258,7 +262,6 @@ class MainWindow(QWidget):
     def _on_extract_file_started(self, file_path: Path) -> None:
         """Cập nhật UI khi bắt đầu extract một file."""
         self._file_table.update_file_status(file_path, "⏳")
-        self._blender.set_status(f"Extracting: {file_path.name}")
 
     def _on_extract_file_completed(
         self, file_path: Path, content: ExtractedContent
@@ -312,6 +315,11 @@ class MainWindow(QWidget):
         self._blender.play_done()
         self._toolbar.set_processing(False)
         self._cost_tracker.set_processing(False)
+
+    def _on_file_removed(self, path: Path) -> None:
+        """Ẩn bảng file khi không còn file nào."""
+        if self._file_table.file_count == 0:
+            self._file_table.setVisible(False)
 
     def _on_extract_cancel(self) -> None:
         """Xử lý khi người dùng bấm Stop trong lúc extract."""
