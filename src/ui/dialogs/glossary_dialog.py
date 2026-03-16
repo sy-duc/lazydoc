@@ -1,9 +1,6 @@
 """GlossaryDialog — Dialog quản lý bảng thuật ngữ."""
 
-import csv
 import logging
-from datetime import datetime, timezone
-from pathlib import Path
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -23,8 +20,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.core.database import DatabaseManager
 from src.core.i18n import I18nManager
+from src.modules.glossary.glossary_manager import GlossaryManager
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +44,7 @@ class GlossaryDialog(QDialog):
         """
         super().__init__(parent)
         self._i18n = I18nManager()
-        self._db = DatabaseManager()
+        self._glossary = GlossaryManager()
         self._editing_id: int | None = None
         self._setup_window()
         self._setup_ui()
@@ -420,26 +417,9 @@ class GlossaryDialog(QDialog):
         lang_to = self._current_lang_to()
         search = self._search_input.text().strip() if hasattr(self, "_search_input") else ""
 
-        conn = self._db.connection
-        if search:
-            pattern = f"%{search}%"
-            cursor = conn.execute(
-                """SELECT id, term_from, term_to FROM glossary
-                   WHERE lang_from = ? AND lang_to = ?
-                     AND (term_from LIKE ? OR term_to LIKE ?)
-                   ORDER BY term_from COLLATE NOCASE""",
-                (lang_from, lang_to, pattern, pattern),
-            )
-        else:
-            cursor = conn.execute(
-                """SELECT id, term_from, term_to FROM glossary
-                   WHERE lang_from = ? AND lang_to = ?
-                   ORDER BY term_from COLLATE NOCASE""",
-                (lang_from, lang_to),
-            )
-
-        for row in cursor.fetchall():
-            self._add_entry_row(row["id"], row["term_from"], row["term_to"])
+        entries = self._glossary.search(lang_from, lang_to, search)
+        for entry in entries:
+            self._add_entry_row(entry["id"], entry["term_from"], entry["term_to"])
 
     # --- Slots ---
 
@@ -467,44 +447,21 @@ class GlossaryDialog(QDialog):
             )
             return
 
-        now = datetime.now(timezone.utc).isoformat()
-        conn = self._db.connection
-
-        if self._editing_id is not None:
-            # Cập nhật bản ghi đang sửa
-            conn.execute(
-                """UPDATE glossary
-                   SET term_from = ?, term_to = ?, lang_from = ?, lang_to = ?,
-                       updated_at = ?
-                   WHERE id = ?""",
-                (term_from, term_to, lang_from, lang_to, now, self._editing_id),
+        try:
+            if self._editing_id is not None:
+                self._glossary.update(
+                    self._editing_id, lang_from, term_from, lang_to, term_to
+                )
+                self._editing_id = None
+            else:
+                self._glossary.add(lang_from, term_from, lang_to, term_to)
+        except ValueError as e:
+            QMessageBox.warning(
+                self,
+                self._i18n.t("glossary.title"),
+                str(e),
             )
-            conn.commit()
-            self._editing_id = None
-            logger.info("Đã cập nhật thuật ngữ: %s → %s", term_from, term_to)
-        else:
-            # Thêm mới hoặc cập nhật nếu trùng
-            try:
-                conn.execute(
-                    """INSERT INTO glossary
-                       (lang_from, term_from, lang_to, term_to, created_at, updated_at)
-                       VALUES (?, ?, ?, ?, ?, ?)""",
-                    (lang_from, term_from, lang_to, term_to, now, now),
-                )
-                conn.commit()
-                logger.info("Đã thêm thuật ngữ: %s → %s", term_from, term_to)
-            except Exception:
-                # UNIQUE constraint — cập nhật bản ghi cũ
-                conn.execute(
-                    """UPDATE glossary
-                       SET term_to = ?, updated_at = ?
-                       WHERE lang_from = ? AND term_from = ? AND lang_to = ?""",
-                    (term_to, now, lang_from, term_from, lang_to),
-                )
-                conn.commit()
-                logger.info(
-                    "Đã cập nhật thuật ngữ trùng: %s → %s", term_from, term_to
-                )
+            return
 
         # Reset form
         self._term_from_input.clear()
@@ -539,10 +496,7 @@ class GlossaryDialog(QDialog):
             QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
-            conn = self._db.connection
-            conn.execute("DELETE FROM glossary WHERE id = ?", (entry_id,))
-            conn.commit()
-            logger.info("Đã xóa thuật ngữ id=%d.", entry_id)
+            self._glossary.delete(entry_id)
             # Nếu đang sửa entry này thì reset form
             if self._editing_id == entry_id:
                 self._editing_id = None
@@ -551,10 +505,7 @@ class GlossaryDialog(QDialog):
             self._load_entries()
 
     def _on_import(self) -> None:
-        """Import thuật ngữ từ file CSV.
-
-        Format CSV: lang_from, term_from, lang_to, term_to
-        """
+        """Import thuật ngữ từ file CSV."""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             self._i18n.t("glossary.btn_import"),
@@ -564,40 +515,16 @@ class GlossaryDialog(QDialog):
         if not file_path:
             return
 
-        count = 0
-        now = datetime.now(timezone.utc).isoformat()
-        conn = self._db.connection
-
         try:
-            with open(file_path, encoding="utf-8-sig", newline="") as f:
-                reader = csv.reader(f)
-                for row in reader:
-                    if len(row) < 4:
-                        continue
-                    lang_from, term_from, lang_to, term_to = (
-                        row[0].strip(),
-                        row[1].strip(),
-                        row[2].strip(),
-                        row[3].strip(),
-                    )
-                    if not all([lang_from, term_from, lang_to, term_to]):
-                        continue
-                    conn.execute(
-                        """INSERT OR REPLACE INTO glossary
-                           (lang_from, term_from, lang_to, term_to, created_at, updated_at)
-                           VALUES (?, ?, ?, ?,
-                                   COALESCE(
-                                       (SELECT created_at FROM glossary
-                                        WHERE lang_from=? AND term_from=? AND lang_to=?),
-                                       ?),
-                                   ?)""",
-                        (
-                            lang_from, term_from, lang_to, term_to,
-                            lang_from, term_from, lang_to, now, now,
-                        ),
-                    )
-                    count += 1
-            conn.commit()
+            count = self._glossary.import_csv(file_path)
+        except (FileNotFoundError, ValueError) as e:
+            logger.error("Lỗi import CSV: %s", e)
+            QMessageBox.warning(
+                self,
+                self._i18n.t("glossary.title"),
+                self._i18n.t("glossary.import_error"),
+            )
+            return
         except Exception as e:
             logger.error("Lỗi import CSV: %s", e)
             QMessageBox.warning(
@@ -607,7 +534,6 @@ class GlossaryDialog(QDialog):
             )
             return
 
-        logger.info("Import thành công %d thuật ngữ từ %s.", count, file_path)
         QMessageBox.information(
             self,
             self._i18n.t("glossary.title"),
@@ -626,24 +552,8 @@ class GlossaryDialog(QDialog):
         if not file_path:
             return
 
-        conn = self._db.connection
-        cursor = conn.execute(
-            """SELECT lang_from, term_from, lang_to, term_to
-               FROM glossary ORDER BY lang_from, lang_to, term_from"""
-        )
-
-        count = 0
         try:
-            with open(file_path, "w", encoding="utf-8", newline="") as f:
-                writer = csv.writer(f)
-                for row in cursor.fetchall():
-                    writer.writerow([
-                        row["lang_from"],
-                        row["term_from"],
-                        row["lang_to"],
-                        row["term_to"],
-                    ])
-                    count += 1
+            count = self._glossary.export_csv(file_path)
         except Exception as e:
             logger.error("Lỗi export CSV: %s", e)
             QMessageBox.warning(
@@ -653,7 +563,6 @@ class GlossaryDialog(QDialog):
             )
             return
 
-        logger.info("Export thành công %d thuật ngữ ra %s.", count, file_path)
         QMessageBox.information(
             self,
             self._i18n.t("glossary.title"),
