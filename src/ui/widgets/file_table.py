@@ -93,12 +93,12 @@ class FileTable(QWidget):
         header.setSectionResizeMode(COL_LANGUAGE, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(COL_DELETE, QHeaderView.ResizeMode.Fixed)
 
-        self._table.setColumnWidth(COL_SELECT, 32)
+        self._table.setColumnWidth(COL_SELECT, 40)
         self._table.setColumnWidth(COL_FILENAME, 150)
         self._table.setColumnWidth(COL_SIZE, 70)
-        self._table.setColumnWidth(COL_STATUS, 60)
-        self._table.setColumnWidth(COL_LANGUAGE, 60)
-        self._table.setColumnWidth(COL_DELETE, 32)
+        self._table.setColumnWidth(COL_STATUS, 70)
+        self._table.setColumnWidth(COL_LANGUAGE, 70)
+        self._table.setColumnWidth(COL_DELETE, 40)
 
         # Cấu hình bảng
         self._table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
@@ -189,7 +189,7 @@ class FileTable(QWidget):
         checkbox_layout.setContentsMargins(0, 0, 0, 0)
         checkbox_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         checkbox = QCheckBox()
-        checkbox.setChecked(True)
+        checkbox.setChecked(False)
         checkbox_layout.addWidget(checkbox)
         self._table.setCellWidget(row, COL_SELECT, checkbox_widget)
 

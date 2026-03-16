@@ -312,6 +312,7 @@ class MainWindow(QWidget):
         summary_text = header + "\n\n".join(self._extract_results)
         self._summary_area.set_summary(summary_text, typing_effect=True)
 
+        self._blender.set_status("")
         self._blender.play_done()
         self._toolbar.set_processing(False)
         self._cost_tracker.set_processing(False)
