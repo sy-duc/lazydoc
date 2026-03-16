@@ -4,8 +4,8 @@ import base64
 import logging
 from collections.abc import Generator
 
-import google.generativeai as genai
-from google.api_core import exceptions as google_exceptions
+from google import genai
+from google.genai import types
 
 from src.providers.base import BaseProvider, StreamChunk
 
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class GeminiProvider(BaseProvider):
     """AI Provider sử dụng Google Gemini API.
 
-    Sử dụng google-generativeai SDK với streaming response.
+    Sử dụng google-genai SDK với streaming response.
     """
 
     def __init__(self, api_key: str, model: str | None = None) -> None:
@@ -26,8 +26,7 @@ class GeminiProvider(BaseProvider):
             model: Tên model Gemini. Mặc định: gemini-1.5-flash.
         """
         super().__init__(api_key, model)
-        genai.configure(api_key=self._api_key)
-        self._client = genai.GenerativeModel(self._model)
+        self._client = genai.Client(api_key=self._api_key)
 
     @property
     def name(self) -> str:
@@ -74,29 +73,29 @@ class GeminiProvider(BaseProvider):
         """Mô tả hình ảnh bằng Gemini Vision, streaming response."""
         image_prompt = self._build_image_prompt(prompt)
 
-        # Gemini nhận image dạng inline_data
-        image_part = {
-            "inline_data": {
-                "mime_type": "image/png",
-                "data": base64.b64encode(image_data).decode("utf-8"),
-            }
-        }
+        # Tạo Part cho image
+        image_part = types.Part.from_bytes(
+            data=image_data,
+            mime_type="image/png",
+        )
 
         try:
-            response = self._client.generate_content(
-                [image_prompt, image_part],
-                stream=True,
-                generation_config=genai.types.GenerationConfig(
+            response_stream = self._client.models.generate_content_stream(
+                model=self._model,
+                contents=[image_prompt, image_part],
+                config=types.GenerateContentConfig(
                     temperature=0.3,
                 ),
             )
 
-            for chunk in response:
+            last_chunk = None
+            for chunk in response_stream:
                 if chunk.text:
                     yield StreamChunk(text=chunk.text)
+                last_chunk = chunk
 
-            # Lấy usage từ response sau khi stream xong
-            usage = response.usage_metadata
+            # Lấy usage từ chunk cuối
+            usage = last_chunk.usage_metadata if last_chunk else None
             yield StreamChunk(
                 is_final=True,
                 input_tokens=usage.prompt_token_count if usage else 0,
@@ -107,18 +106,17 @@ class GeminiProvider(BaseProvider):
             raise
 
     def validate_key(self) -> bool:
-        """Kiểm tra API key Gemini bằng cách liệt kê models."""
+        """Kiểm tra API key Gemini bằng cách liệt kê models (miễn phí)."""
         try:
-            # Gọi API nhẹ để kiểm tra key
-            list(genai.list_models())
+            # Lấy 1 model để kiểm tra key hợp lệ
+            for _ in self._client.models.list():
+                break
             return True
-        except google_exceptions.PermissionDenied:
-            logger.warning("Gemini API key không hợp lệ.")
-            return False
-        except google_exceptions.Unauthenticated:
-            logger.warning("Gemini API key không hợp lệ.")
-            return False
         except Exception as e:
+            error_str = str(e).lower()
+            if "permission" in error_str or "authenticat" in error_str or "api key" in error_str:
+                logger.warning("Gemini API key không hợp lệ.")
+                return False
             logger.error("Gemini validate_key lỗi: %s", e)
             return False
 
@@ -134,27 +132,24 @@ class GeminiProvider(BaseProvider):
         Yields:
             StreamChunk chứa text từ response.
         """
-        # Tạo model mới với system_instruction
-        model = genai.GenerativeModel(
-            self._model,
-            system_instruction=system_prompt,
-        )
-
         try:
-            response = model.generate_content(
-                user_prompt,
-                stream=True,
-                generation_config=genai.types.GenerationConfig(
+            response_stream = self._client.models.generate_content_stream(
+                model=self._model,
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
                     temperature=0.3,
                 ),
             )
 
-            for chunk in response:
+            last_chunk = None
+            for chunk in response_stream:
                 if chunk.text:
                     yield StreamChunk(text=chunk.text)
+                last_chunk = chunk
 
-            # Lấy usage metadata sau khi stream hoàn tất
-            usage = response.usage_metadata
+            # Lấy usage metadata từ chunk cuối
+            usage = last_chunk.usage_metadata if last_chunk else None
             yield StreamChunk(
                 is_final=True,
                 input_tokens=usage.prompt_token_count if usage else 0,

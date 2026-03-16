@@ -9,56 +9,58 @@ from src.providers.base import StreamChunk
 
 
 class TestGeminiProvider:
-    """Test GeminiProvider với mock google-generativeai SDK."""
+    """Test GeminiProvider với mock google-genai SDK."""
 
-    @patch("src.providers.gemini_provider.genai")
-    def test_init(self, mock_genai) -> None:
+    @patch("src.providers.gemini_provider.genai.Client")
+    def test_init(self, mock_client_cls) -> None:
         from src.providers.gemini_provider import GeminiProvider
 
         provider = GeminiProvider(api_key="test-key")
-        mock_genai.configure.assert_called_once_with(api_key="test-key")
+        mock_client_cls.assert_called_once_with(api_key="test-key")
         assert provider.name == "gemini"
         assert provider.model == "gemini-1.5-flash"
 
-    @patch("src.providers.gemini_provider.genai")
-    def test_custom_model(self, mock_genai) -> None:
+    @patch("src.providers.gemini_provider.genai.Client")
+    def test_custom_model(self, mock_client_cls) -> None:
         from src.providers.gemini_provider import GeminiProvider
 
         provider = GeminiProvider(api_key="key", model="gemini-1.5-pro")
         assert provider.model == "gemini-1.5-pro"
 
-    @patch("src.providers.gemini_provider.genai")
-    def test_supported_models(self, mock_genai) -> None:
+    @patch("src.providers.gemini_provider.genai.Client")
+    def test_supported_models(self, mock_client_cls) -> None:
         from src.providers.gemini_provider import GeminiProvider
 
         provider = GeminiProvider(api_key="key")
         assert "gemini-1.5-flash" in provider.supported_models
         assert "gemini-1.5-pro" in provider.supported_models
 
-    @patch("src.providers.gemini_provider.genai")
-    def test_summarize_streaming(self, mock_genai) -> None:
+    @patch("src.providers.gemini_provider.genai.Client")
+    def test_summarize_streaming(self, mock_client_cls) -> None:
         from src.providers.gemini_provider import GeminiProvider
 
-        # Mock streaming response
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        # Mock streaming response — chunk cuối chứa usage_metadata
         mock_chunk1 = MagicMock()
         mock_chunk1.text = "Đây là "
+        mock_chunk1.usage_metadata = None
+
         mock_chunk2 = MagicMock()
         mock_chunk2.text = "tóm tắt."
-
-        mock_model = MagicMock()
-        mock_response = MagicMock()
-        mock_response.__iter__ = lambda self: iter([mock_chunk1, mock_chunk2])
         mock_usage = MagicMock()
         mock_usage.prompt_token_count = 100
         mock_usage.candidates_token_count = 50
-        mock_response.usage_metadata = mock_usage
-        mock_model.generate_content.return_value = mock_response
-        mock_genai.GenerativeModel.return_value = mock_model
+        mock_chunk2.usage_metadata = mock_usage
+
+        mock_client.models.generate_content_stream.return_value = iter(
+            [mock_chunk1, mock_chunk2]
+        )
 
         provider = GeminiProvider(api_key="key")
         chunks = list(provider.summarize("Test content"))
 
-        # Phải có ít nhất text chunks + 1 final chunk
         text_chunks = [c for c in chunks if c.text]
         final_chunks = [c for c in chunks if c.is_final]
 
@@ -67,21 +69,24 @@ class TestGeminiProvider:
         assert final_chunks[0].input_tokens == 100
         assert final_chunks[0].output_tokens == 50
 
-    @patch("src.providers.gemini_provider.genai")
-    def test_validate_key_success(self, mock_genai) -> None:
+    @patch("src.providers.gemini_provider.genai.Client")
+    def test_validate_key_success(self, mock_client_cls) -> None:
         from src.providers.gemini_provider import GeminiProvider
 
-        mock_genai.list_models.return_value = iter([MagicMock()])
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.models.list.return_value = iter([MagicMock()])
 
         provider = GeminiProvider(api_key="valid-key")
         assert provider.validate_key() is True
 
-    @patch("src.providers.gemini_provider.genai")
-    def test_validate_key_failure(self, mock_genai) -> None:
+    @patch("src.providers.gemini_provider.genai.Client")
+    def test_validate_key_failure(self, mock_client_cls) -> None:
         from src.providers.gemini_provider import GeminiProvider
-        from google.api_core.exceptions import PermissionDenied
 
-        mock_genai.list_models.side_effect = PermissionDenied("Invalid key")
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.models.list.side_effect = Exception("permission denied: invalid API key")
 
         provider = GeminiProvider(api_key="bad-key")
         assert provider.validate_key() is False
