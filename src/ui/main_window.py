@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 
 from src.core.i18n import I18nManager
 from src.modules.extract import ExtractModule
+from src.modules.translator import TranslateModule
 from src.processors.base import ExtractedContent
 from src.processors.factory import ProcessorFactory
 from src.providers.provider_manager import ProviderManager
@@ -52,6 +53,7 @@ class MainWindow(QWidget):
         self._setup_window()
         self._setup_ui()
         self._setup_extract_module()
+        self._setup_translate_module()
         self._setup_provider_connections()
         self._setup_style()
         self.setAcceptDrops(True)
@@ -210,6 +212,10 @@ class MainWindow(QWidget):
         self._file_table.file_removed.connect(self._extract_module.invalidate)
         self._file_table.file_removed.connect(self._on_file_removed)
 
+    def _setup_translate_module(self) -> None:
+        """Khởi tạo TranslateModule."""
+        self._translate_module = TranslateModule(self)
+
     # --- Slots ---
 
     def _create_overlay(self) -> QWidget:
@@ -357,8 +363,31 @@ class MainWindow(QWidget):
 
         overlay = self._create_overlay()
         dialog = TranslateDialog(checked_files, self)
+
+        # Kết nối Dialog → TranslateModule
+        dialog.translate_requested.connect(self._translate_module.start_translate)
+        dialog.stop_requested.connect(self._translate_module.cancel)
+
+        # Kết nối TranslateModule → Dialog
+        self._translate_module.progress_updated.connect(dialog.update_progress)
+        self._translate_module.translate_completed.connect(
+            lambda s, f, _: dialog.on_translate_done()
+        )
+        self._translate_module.error_occurred.connect(
+            lambda msg: self._on_translate_error(dialog, msg)
+        )
+
         dialog.exec()
+
+        # Ngắt kết nối khi đóng dialog
+        self._translate_module.progress_updated.disconnect(dialog.update_progress)
         overlay.deleteLater()
+
+    def _on_translate_error(self, dialog: TranslateDialog, msg: str) -> None:
+        """Xử lý lỗi từ TranslateModule — reset dialog và hiển thị lỗi."""
+        dialog.on_translate_done()
+        self._summary_area.set_summary(f"[LỖI] {msg}", typing_effect=False)
+        logger.error("Lỗi dịch thuật: %s", msg)
 
     # --- Public API ---
 
