@@ -19,7 +19,9 @@
     "col_language": "Language",
     "col_delete": "Delete",
     "cost_label": "Cost",
-    "token_label": "Tokens"
+    "token_label": "Tokens",
+    "no_file_selected": "No files selected. Please drag & drop files and check them.",
+    "extract_before_translate": "Please click Grind to extract content before translating."
   },
   "settings": {
     "title": "API Key Settings",

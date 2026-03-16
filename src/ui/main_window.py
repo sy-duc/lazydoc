@@ -13,6 +13,9 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.i18n import I18nManager
+from src.modules.extract import ExtractModule
+from src.processors.base import ExtractedContent
+from src.processors.factory import ProcessorFactory
 from src.ui.dialogs.settings_dialog import SettingsDialog
 from src.ui.dialogs.translate_dialog import TranslateDialog
 from src.ui.widgets.file_table import FileTable
@@ -24,12 +27,8 @@ from src.ui.widgets.title_bar import TitleBar
 
 logger = logging.getLogger(__name__)
 
-# Định dạng file được hỗ trợ
-SUPPORTED_EXTENSIONS = {
-    ".xlsx", ".xls", ".docx", ".doc", ".pptx", ".ppt",
-    ".pdf", ".txt", ".csv",
-    ".png", ".jpg", ".jpeg", ".bmp", ".gif",
-}
+# Lấy danh sách extension hỗ trợ từ ProcessorFactory
+SUPPORTED_EXTENSIONS = set(ProcessorFactory.get_supported_extensions())
 
 
 class MainWindow(QWidget):
@@ -43,8 +42,10 @@ class MainWindow(QWidget):
         super().__init__()
         self._i18n = I18nManager()
         self._drag_start_pos = None
+        self._extract_results: list[str] = []
         self._setup_window()
         self._setup_ui()
+        self._setup_extract_module()
         self._setup_style()
         self.setAcceptDrops(True)
 
@@ -93,6 +94,7 @@ class MainWindow(QWidget):
         self._toolbar = Toolbar()
         self._toolbar.settings_clicked.connect(self._open_settings)
         self._toolbar.translate_clicked.connect(self._open_translate)
+        self._toolbar.grind_clicked.connect(self._on_grind)
         content_layout.addWidget(self._toolbar)
 
         main_layout.addWidget(content, stretch=1)
@@ -174,6 +176,22 @@ class MainWindow(QWidget):
         """Kết thúc kéo cửa sổ."""
         self._drag_start_pos = None
 
+    def _setup_extract_module(self) -> None:
+        """Khởi tạo ExtractModule và kết nối signal."""
+        self._extract_module = ExtractModule(self)
+
+        # Kết nối signal từ ExtractModule đến UI
+        self._extract_module.file_started.connect(self._on_extract_file_started)
+        self._extract_module.file_completed.connect(self._on_extract_file_completed)
+        self._extract_module.file_failed.connect(self._on_extract_file_failed)
+        self._extract_module.extract_completed.connect(self._on_extract_completed)
+
+        # Kết nối nút Stop từ CostTracker
+        self._cost_tracker.stop_clicked.connect(self._on_extract_cancel)
+
+        # Xóa cache khi file bị xóa khỏi bảng
+        self._file_table.file_removed.connect(self._extract_module.invalidate)
+
     # --- Slots ---
 
     def _create_overlay(self) -> QWidget:
@@ -195,16 +213,136 @@ class MainWindow(QWidget):
         dialog.exec()
         overlay.deleteLater()
 
-    def _open_translate(self) -> None:
-        """Mở dialog dịch thuật với các file đã checked."""
-        # TODO: Bỏ bypass khi hoàn thiện logic chọn file
-        overlay = self._create_overlay()
+    def _on_grind(self) -> None:
+        """Bấm Xay → trigger Extract Module → cập nhật UI async."""
         checked_files = self._file_table.get_checked_files()
+        if not checked_files:
+            self._summary_area.set_summary(
+                self._i18n.t("main.no_file_selected"),
+                typing_effect=False,
+            )
+            return
+
+        if self._extract_module.is_running:
+            logger.warning("Extract đang chạy, bỏ qua.")
+            return
+
+        # Chuẩn bị UI cho quá trình extract
+        self._extract_results.clear()
+        self._blender.set_status("Extracting...")
+        self._toolbar.set_processing(True)
+        self._cost_tracker.set_processing(True)
+        self._summary_area.clear()
+
+        # Cập nhật trạng thái "đang chờ" cho các file checked
+        for file_path in checked_files:
+            self._file_table.update_file_status(file_path, "⏳")
+
+        # Bắt đầu extract qua module (async trên QThread)
+        self._extract_module.start_extract(checked_files)
+
+    def _on_extract_file_started(self, file_path: Path) -> None:
+        """Cập nhật UI khi bắt đầu extract một file."""
+        self._file_table.update_file_status(file_path, "⏳")
+        self._blender.set_status(f"Extracting: {file_path.name}")
+
+    def _on_extract_file_completed(
+        self, file_path: Path, content: ExtractedContent
+    ) -> None:
+        """Cập nhật UI khi extract một file thành công."""
+        self._file_table.update_file_status(file_path, "✓")
+
+        # Hiển thị metadata trên cột Ý nghĩa
+        meta_parts = [f"{k}: {v}" for k, v in content.metadata.items()]
+        meta_str = ", ".join(meta_parts) if meta_parts else "OK"
+        self._file_table.update_file_purpose(file_path, meta_str)
+
+        # Chuẩn bị text tóm tắt cho file này
+        parts: list[str] = []
+
+        full_text = content.get_full_text()
+        if full_text:
+            preview = full_text[:200] + "..." if len(full_text) > 200 else full_text
+            parts.append(preview)
+
+        if content.shapes_text:
+            total_shapes = sum(len(v) for v in content.shapes_text.values())
+            parts.append(f"[Shapes ({total_shapes})]")
+            for section, texts in content.shapes_text.items():
+                for t in texts[:3]:
+                    parts.append(f"  [{section}] {t[:80]}")
+
+        if content.images:
+            keys_preview = ", ".join(list(content.images.keys())[:3])
+            parts.append(f"[Images: {len(content.images)} file(s): {keys_preview}]")
+
+        self._extract_results.append(
+            f"--- {content.file_name} ---\n" + "\n".join(parts)
+        )
+
+    def _on_extract_file_failed(self, file_path: Path, error_msg: str) -> None:
+        """Cập nhật UI khi extract một file thất bại."""
+        self._file_table.update_file_status(file_path, "✗")
+        self._file_table.update_file_purpose(file_path, error_msg[:80])
+        self._extract_results.append(
+            f"--- {file_path.name} ---\n[LỖI] {error_msg}"
+        )
+        logger.error("Extract thất bại: %s — %s", file_path.name, error_msg)
+
+    def _on_extract_completed(self, success_count: int, fail_count: int) -> None:
+        """Cập nhật UI khi toàn bộ extract hoàn tất."""
+        header = f"Extract hoàn tất: {success_count} thành công, {fail_count} thất bại\n\n"
+        summary_text = header + "\n\n".join(self._extract_results)
+        self._summary_area.set_summary(summary_text, typing_effect=True)
+
+        self._blender.play_done()
+        self._toolbar.set_processing(False)
+        self._cost_tracker.set_processing(False)
+
+    def _on_extract_cancel(self) -> None:
+        """Xử lý khi người dùng bấm Stop trong lúc extract."""
+        if self._extract_module.is_running:
+            self._extract_module.cancel()
+            self._blender.set_status("")
+            self._toolbar.set_processing(False)
+            self._cost_tracker.set_processing(False)
+
+    def _open_translate(self) -> None:
+        """Mở dialog dịch thuật với các file đã checked.
+
+        Nếu file chưa được extract, sẽ trigger extract trước khi mở dialog.
+        """
+        checked_files = self._file_table.get_checked_files()
+        if not checked_files:
+            self._summary_area.set_summary(
+                self._i18n.t("main.no_file_selected"),
+                typing_effect=False,
+            )
+            return
+
+        # Kiểm tra nếu có file chưa extract → trigger extract trước
+        uncached = [
+            f for f in checked_files
+            if self._extract_module.get_cached(f) is None
+        ]
+        if uncached:
+            self._summary_area.set_summary(
+                self._i18n.t("main.extract_before_translate"),
+                typing_effect=False,
+            )
+            return
+
+        overlay = self._create_overlay()
         dialog = TranslateDialog(checked_files, self)
         dialog.exec()
         overlay.deleteLater()
 
     # --- Public API ---
+
+    @property
+    def extract_module(self) -> ExtractModule:
+        """Truy cập module extract."""
+        return self._extract_module
 
     @property
     def file_table(self) -> FileTable:

@@ -19,7 +19,9 @@
     "col_language": "Ngôn ngữ",
     "col_delete": "Xóa",
     "cost_label": "Chi phí",
-    "token_label": "Token"
+    "token_label": "Token",
+    "no_file_selected": "Chưa có file nào được chọn. Hãy kéo thả file vào và tick chọn.",
+    "extract_before_translate": "Vui lòng bấm Xay để trích xuất nội dung trước khi dịch."
   },
   "settings": {
     "title": "Cài đặt API Key",
