@@ -31,7 +31,9 @@
     "btn_save": "Save",
     "btn_cancel": "Cancel",
     "validation_empty": "Please enter an API key.",
-    "save_success": "API key saved successfully."
+    "validating": "Validating...",
+    "validation_failed": "Invalid API key. Please check and try again.",
+    "save_success": "API key saved and connected successfully."
   },
   "translate": {
     "title": "Translation",

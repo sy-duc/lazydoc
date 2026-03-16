@@ -31,7 +31,9 @@
     "btn_save": "Lưu",
     "btn_cancel": "Hủy",
     "validation_empty": "Vui lòng nhập API key.",
-    "save_success": "Đã lưu API key thành công."
+    "validating": "Đang kiểm tra...",
+    "validation_failed": "API key không hợp lệ. Vui lòng kiểm tra lại.",
+    "save_success": "Đã lưu API key và kết nối thành công."
   },
   "translate": {
     "title": "Dịch thuật",

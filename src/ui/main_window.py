@@ -16,6 +16,7 @@ from src.core.i18n import I18nManager
 from src.modules.extract import ExtractModule
 from src.processors.base import ExtractedContent
 from src.processors.factory import ProcessorFactory
+from src.providers.provider_manager import ProviderManager
 from src.ui.dialogs.settings_dialog import SettingsDialog
 from src.ui.dialogs.translate_dialog import TranslateDialog
 from src.ui.widgets.file_table import FileTable
@@ -37,15 +38,21 @@ class MainWindow(QWidget):
     # Signal khi có file được thêm vào
     files_added = Signal(list)
 
-    def __init__(self) -> None:
-        """Khởi tạo MainWindow."""
+    def __init__(self, provider_manager: ProviderManager | None = None) -> None:
+        """Khởi tạo MainWindow.
+
+        Args:
+            provider_manager: ProviderManager instance từ main.py.
+        """
         super().__init__()
         self._i18n = I18nManager()
+        self._provider_manager = provider_manager or ProviderManager()
         self._drag_start_pos = None
         self._extract_results: list[str] = []
         self._setup_window()
         self._setup_ui()
         self._setup_extract_module()
+        self._setup_provider_connections()
         self._setup_style()
         self.setAcceptDrops(True)
 
@@ -131,6 +138,13 @@ class MainWindow(QWidget):
             }
         """)
 
+    def _setup_provider_connections(self) -> None:
+        """Kết nối ProviderManager/TokenCounter với UI."""
+        # TokenCounter → CostTracker: cập nhật chi phí realtime
+        self._provider_manager.token_counter.usage_updated.connect(
+            self._cost_tracker.update_cost
+        )
+
     # --- Drag & Drop ---
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
@@ -209,7 +223,7 @@ class MainWindow(QWidget):
     def _open_settings(self) -> None:
         """Mở dialog cài đặt API Key."""
         overlay = self._create_overlay()
-        dialog = SettingsDialog(self)
+        dialog = SettingsDialog(self, provider_manager=self._provider_manager)
         dialog.exec()
         overlay.deleteLater()
 
@@ -338,6 +352,11 @@ class MainWindow(QWidget):
         overlay.deleteLater()
 
     # --- Public API ---
+
+    @property
+    def provider_manager(self) -> ProviderManager:
+        """Truy cập ProviderManager."""
+        return self._provider_manager
 
     @property
     def extract_module(self) -> ExtractModule:

@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 from src.core.database import DatabaseManager
 from src.core.encryption import EncryptionManager
 from src.core.i18n import I18nManager
+from src.providers.provider_manager import ProviderManager
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +37,22 @@ PROVIDER_DISPLAY_NAMES = {
 class SettingsDialog(QDialog):
     """Dialog cài đặt API Key cho AI Provider."""
 
-    def __init__(self, parent: QWidget | None = None) -> None:
-        """Khởi tạo SettingsDialog."""
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        provider_manager: ProviderManager | None = None,
+    ) -> None:
+        """Khởi tạo SettingsDialog.
+
+        Args:
+            parent: Widget cha.
+            provider_manager: ProviderManager để validate key và chuyển đổi provider.
+        """
         super().__init__(parent)
         self._i18n = I18nManager()
         self._db = DatabaseManager()
         self._encryption = EncryptionManager()
+        self._provider_manager = provider_manager
         self._providers: list[dict] = []
         self._setup_window()
         self._setup_ui()
@@ -275,7 +286,15 @@ class SettingsDialog(QDialog):
         self._key_input.clear()
 
     def _on_save(self) -> None:
-        """Xử lý khi người dùng bấm nút Lưu."""
+        """Xử lý khi người dùng bấm nút Lưu.
+
+        Luồng xử lý:
+        1. Validate input (key không trống).
+        2. Nếu có key mới → validate bằng cách gọi API thật.
+        3. Lưu key mã hóa vào DB.
+        4. Chuyển đổi provider active.
+        5. Reload ProviderManager để sử dụng provider mới.
+        """
         index = self._provider_combo.currentIndex()
         if index < 0:
             return
@@ -292,6 +311,28 @@ class SettingsDialog(QDialog):
             )
             self._key_input.setFocus()
             return
+
+        # Validate API key mới bằng cách gọi API thật
+        if new_key and self._provider_manager:
+            self._save_btn.setEnabled(False)
+            self._save_btn.setText(self._i18n.t("settings.validating"))
+            self._save_btn.repaint()
+
+            is_valid = self._provider_manager.validate_api_key(
+                provider["name"], new_key
+            )
+
+            self._save_btn.setEnabled(True)
+            self._save_btn.setText(self._i18n.t("settings.btn_save"))
+
+            if not is_valid:
+                QMessageBox.warning(
+                    self,
+                    self._i18n.t("settings.title"),
+                    self._i18n.t("settings.validation_failed"),
+                )
+                self._key_input.setFocus()
+                return
 
         now = datetime.now(timezone.utc).isoformat()
         conn = self._db.connection
@@ -329,6 +370,10 @@ class SettingsDialog(QDialog):
         self._current_provider_label.setText(
             f"{self._i18n.t('settings.provider_label')}: {display_name}"
         )
+
+        # Reload ProviderManager để sử dụng provider mới ngay lập tức
+        if self._provider_manager:
+            self._provider_manager.load_active_provider()
 
         logger.info("Đã chuyển provider active sang: %s", provider["name"])
 
