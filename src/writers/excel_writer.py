@@ -1,29 +1,26 @@
 """ExcelWriter — Ghi file Excel đã dịch, giữ nguyên định dạng gốc."""
 
 import logging
+import re
 import shutil
 import zipfile
-from copy import deepcopy
 from pathlib import Path
 from typing import Callable
-from xml.etree import ElementTree as ET
 
 from src.writers.base import FileWriter
 
 logger = logging.getLogger(__name__)
 
-# Namespaces dùng trong xlsx XML
-_NS = {
-    "sst": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
-    "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
-}
+# Namespace chính của xlsx
+_SPREADSHEET_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 
 
 class ExcelWriter(FileWriter):
     """Writer cho file Excel (.xlsx, .xls).
 
     Chiến lược 2 nhánh:
-    - File có shapes/images: thao tác tầng ZIP/XML để giữ nguyên 100%.
+    - File có shapes/images: thao tác tầng ZIP, dùng regex sửa XML text
+      mà không parse/serialize lại (giữ nguyên namespace, cấu trúc).
     - File đơn giản: dùng openpyxl (nhanh hơn, dễ xử lý formatting).
     """
 
@@ -66,7 +63,7 @@ class ExcelWriter(FileWriter):
             pass
         return False
 
-    # --- Nhánh ZIP/XML (giữ nguyên shapes) ---
+    # --- Nhánh ZIP + regex (giữ nguyên shapes) ---
 
     def _write_xlsx_zip(
         self,
@@ -74,111 +71,136 @@ class ExcelWriter(FileWriter):
         output_path: Path,
         translate_fn: Callable[[str], str],
     ) -> None:
-        """Dịch file .xlsx bằng thao tác ZIP/XML — giữ nguyên shapes/images.
+        """Dịch file .xlsx bằng thao tác ZIP + regex — giữ nguyên shapes/images.
 
-        Chỉ sửa xl/sharedStrings.xml (text cells) và xl/workbook.xml (tên sheet),
-        giữ nguyên mọi file khác trong zip.
+        Dùng regex thay thế text trong XML thay vì parse/serialize lại,
+        tránh phá vỡ namespace prefixes và cấu trúc XML gốc.
         """
         shutil.copy2(source_path, output_path)
 
         with zipfile.ZipFile(source_path, "r") as zf_in:
-            # Đọc và dịch sharedStrings
             modified_files: dict[str, bytes] = {}
 
+            # Dịch sharedStrings.xml (chứa toàn bộ text cells)
             if "xl/sharedStrings.xml" in zf_in.namelist():
                 sst_xml = zf_in.read("xl/sharedStrings.xml")
-                translated_sst = self._translate_shared_strings(sst_xml, translate_fn)
+                translated_sst = self._translate_shared_strings_regex(sst_xml, translate_fn)
                 modified_files["xl/sharedStrings.xml"] = translated_sst
 
             # Dịch tên sheet trong workbook.xml
             if "xl/workbook.xml" in zf_in.namelist():
                 wb_xml = zf_in.read("xl/workbook.xml")
-                translated_wb = self._translate_workbook_sheet_names(wb_xml, translate_fn)
+                translated_wb = self._translate_sheet_names_regex(wb_xml, translate_fn)
                 modified_files["xl/workbook.xml"] = translated_wb
 
             # Dịch inline strings trong từng sheet
             for name in zf_in.namelist():
                 if name.startswith("xl/worksheets/") and name.endswith(".xml"):
                     sheet_xml = zf_in.read(name)
-                    translated_sheet = self._translate_inline_strings(sheet_xml, translate_fn)
+                    translated_sheet = self._translate_inline_strings_regex(
+                        sheet_xml, translate_fn
+                    )
                     if translated_sheet is not None:
                         modified_files[name] = translated_sheet
 
-        # Ghi lại file zip với các file đã sửa
         self._replace_in_zip(output_path, modified_files)
         logger.info("Đã ghi file xlsx (ZIP mode): %s", output_path.name)
 
-    def _translate_shared_strings(
-        self, xml_data: bytes, translate_fn: Callable[[str], str]
+    @staticmethod
+    def _translate_shared_strings_regex(
+        xml_data: bytes, translate_fn: Callable[[str], str]
     ) -> bytes:
-        """Dịch text trong xl/sharedStrings.xml."""
-        tree = ET.ElementTree(ET.fromstring(xml_data))
-        root = tree.getroot()
-        ns = _NS["sst"]
+        """Dịch text trong sharedStrings.xml bằng regex.
 
-        for si in root.findall(f"{{{ns}}}si"):
-            # Trường hợp 1: <si><t>text</t></si>
-            t_elem = si.find(f"{{{ns}}}t")
-            if t_elem is not None and t_elem.text and t_elem.text.strip():
-                t_elem.text = translate_fn(t_elem.text)
-                continue
+        Tìm tất cả thẻ <t>...</t> (có hoặc không có namespace prefix)
+        và dịch nội dung text bên trong, giữ nguyên XML xung quanh.
+        """
+        xml_str = xml_data.decode("utf-8")
 
-            # Trường hợp 2: <si><r><t>text</t></r>...</si> (rich text)
-            runs = si.findall(f".//{{{ns}}}r")
-            if runs:
-                full_text = ""
-                t_elements = []
-                for r in runs:
-                    t = r.find(f"{{{ns}}}t")
-                    if t is not None and t.text:
-                        full_text += t.text
-                        t_elements.append(t)
+        # Match thẻ <t> với mọi namespace prefix: <t>, <x:t>, <ns0:t>, ...
+        # Cũng match attributes như xml:space="preserve"
+        pattern = re.compile(r'(<(?:[\w.:]+)?t(?:\s[^>]*)?>)([^<]+)(</(?:[\w.:]+)?t>)')
 
-                if full_text.strip() and t_elements:
-                    translated = translate_fn(full_text)
-                    t_elements[0].text = translated
-                    for t in t_elements[1:]:
-                        t.text = ""
+        def _replace_text(match: re.Match) -> str:
+            open_tag = match.group(1)
+            text = match.group(2)
+            close_tag = match.group(3)
+            if text.strip():
+                text = translate_fn(text)
+            return f"{open_tag}{text}{close_tag}"
 
-        return ET.tostring(root, xml_declaration=True, encoding="UTF-8")
+        translated = pattern.sub(_replace_text, xml_str)
+        return translated.encode("utf-8")
 
-    def _translate_workbook_sheet_names(
-        self, xml_data: bytes, translate_fn: Callable[[str], str]
+    @staticmethod
+    def _translate_sheet_names_regex(
+        xml_data: bytes, translate_fn: Callable[[str], str]
     ) -> bytes:
-        """Dịch tên sheet trong xl/workbook.xml."""
-        tree = ET.ElementTree(ET.fromstring(xml_data))
-        root = tree.getroot()
-        ns = _NS["sst"]
+        """Dịch tên sheet trong workbook.xml bằng regex."""
+        xml_str = xml_data.decode("utf-8")
 
-        for sheet in root.findall(f".//{{{ns}}}sheet"):
-            name = sheet.get("name", "")
+        # Match attribute name="..." trong thẻ <sheet ...>
+        pattern = re.compile(r'(<(?:[\w.:]+)?sheet\s[^>]*\bname=")([^"]+)(")')
+
+        def _replace_name(match: re.Match) -> str:
+            prefix = match.group(1)
+            name = match.group(2)
+            suffix = match.group(3)
             if name.strip():
-                translated_name = translate_fn(name)
-                # Tên sheet tối đa 31 ký tự, không chứa ký tự đặc biệt
-                translated_name = self._sanitize_sheet_name(translated_name)
-                sheet.set("name", translated_name)
+                translated = translate_fn(name)
+                # Sanitize tên sheet
+                translated = re.sub(r'[\[\]*?/\\]', '', translated)
+                translated = translated[:31].strip() or "Sheet"
+                return f"{prefix}{translated}{suffix}"
+            return match.group(0)
 
-        return ET.tostring(root, xml_declaration=True, encoding="UTF-8")
+        translated = pattern.sub(_replace_name, xml_str)
+        return translated.encode("utf-8")
 
-    def _translate_inline_strings(
-        self, xml_data: bytes, translate_fn: Callable[[str], str]
+    @staticmethod
+    def _translate_inline_strings_regex(
+        xml_data: bytes, translate_fn: Callable[[str], str]
     ) -> bytes | None:
-        """Dịch inline strings trong sheet XML (cell có type='inlineStr')."""
-        tree = ET.ElementTree(ET.fromstring(xml_data))
-        root = tree.getroot()
-        ns = _NS["sst"]
+        """Dịch inline strings trong sheet XML bằng regex.
+
+        Inline strings nằm trong thẻ <is><t>text</t></is>.
+        """
+        xml_str = xml_data.decode("utf-8")
+
+        # Chỉ match <t> bên trong <is>...</is>
+        is_pattern = re.compile(
+            r'(<(?:[\w.:]+)?is(?:\s[^>]*)?>)(.*?)(</(?:[\w.:]+)?is>)',
+            re.DOTALL,
+        )
 
         has_changes = False
-        for is_elem in root.findall(f".//{{{ns}}}is"):
-            t_elem = is_elem.find(f"{{{ns}}}t")
-            if t_elem is not None and t_elem.text and t_elem.text.strip():
-                t_elem.text = translate_fn(t_elem.text)
-                has_changes = True
+
+        def _replace_is_block(match: re.Match) -> str:
+            nonlocal has_changes
+            open_is = match.group(1)
+            inner = match.group(2)
+            close_is = match.group(3)
+
+            t_pattern = re.compile(r'(<(?:[\w.:]+)?t(?:\s[^>]*)?>)([^<]+)(</(?:[\w.:]+)?t>)')
+
+            def _replace_t(t_match: re.Match) -> str:
+                nonlocal has_changes
+                open_t = t_match.group(1)
+                text = t_match.group(2)
+                close_t = t_match.group(3)
+                if text.strip():
+                    has_changes = True
+                    text = translate_fn(text)
+                return f"{open_t}{text}{close_t}"
+
+            new_inner = t_pattern.sub(_replace_t, inner)
+            return f"{open_is}{new_inner}{close_is}"
+
+        translated = is_pattern.sub(_replace_is_block, xml_str)
 
         if not has_changes:
             return None
-
-        return ET.tostring(root, xml_declaration=True, encoding="UTF-8")
+        return translated.encode("utf-8")
 
     @staticmethod
     def _replace_in_zip(zip_path: Path, modified_files: dict[str, bytes]) -> None:
@@ -197,17 +219,14 @@ class ExcelWriter(FileWriter):
 
         temp_path.replace(zip_path)
 
+    # --- Nhánh openpyxl (file đơn giản) ---
+
     @staticmethod
     def _sanitize_sheet_name(name: str) -> str:
         """Chuẩn hóa tên sheet theo quy tắc Excel."""
-        import re
-        # Loại bỏ ký tự không hợp lệ: [ ] * ? / \
         name = re.sub(r'[\[\]*?/\\]', '', name)
-        # Tối đa 31 ký tự
         name = name[:31].strip()
         return name if name else "Sheet"
-
-    # --- Nhánh openpyxl (file đơn giản) ---
 
     def _write_xlsx_openpyxl(
         self,
@@ -281,7 +300,6 @@ class ExcelWriter(FileWriter):
                     elif value != "":
                         ws.cell(row=row_idx + 1, column=col_idx + 1, value=value)
 
-        # Đổi extension sang .xlsx
         actual_output = output_path.with_suffix(".xlsx")
         wb.save(actual_output)
         wb.close()
