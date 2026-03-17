@@ -33,5 +33,8 @@ htmlcov/
 *.spec
 *.exe
 
+# Argos Translate models (file lớn ~150MB/model)
+resources/argos_models/*.argosmodel
+
 # Secrets
 .env

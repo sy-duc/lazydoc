@@ -2,9 +2,21 @@
 
 import logging
 import re
+from pathlib import Path
 from typing import Callable
 
 logger = logging.getLogger(__name__)
+
+# Thư mục chứa model đóng gói sẵn trong project
+_BUNDLED_MODELS_DIR = Path(__file__).resolve().parents[3] / "resources" / "argos_models"
+
+# Mapping tên file model cho từng cặp ngôn ngữ
+_MODEL_FILES = {
+    ("en", "vi"): "translate-en_vi-1_9.argosmodel",
+    ("vi", "en"): "translate-vi_en-1_9.argosmodel",
+    ("en", "ja"): "translate-en_ja-1_1.argosmodel",
+    ("ja", "en"): "translate-ja_en-1_1.argosmodel",
+}
 
 # Mapping mã ngôn ngữ nội bộ → mã Argos
 _LANG_MAP = {
@@ -38,6 +50,9 @@ class ArgosEngine:
     def ensure_models(self, source_lang: str, target_lang: str) -> None:
         """Đảm bảo model cho cặp ngôn ngữ đã được cài đặt.
 
+        Ưu tiên cài từ file đóng gói sẵn trong resources/argos_models/.
+        Chỉ fallback tải online nếu không tìm thấy file bundled.
+
         Args:
             source_lang: Mã ngôn ngữ nguồn (vi, en, ja).
             target_lang: Mã ngôn ngữ đích (vi, en, ja).
@@ -48,10 +63,6 @@ class ArgosEngine:
         import argostranslate.package
         import argostranslate.translate
 
-        if not self._initialized:
-            argostranslate.package.update_package_index()
-            self._initialized = True
-
         pairs_needed = self._get_required_pairs(source_lang, target_lang)
 
         for src, tgt in pairs_needed:
@@ -59,33 +70,80 @@ class ArgosEngine:
                 continue
 
             # Kiểm tra đã cài chưa
-            installed = argostranslate.translate.get_installed_languages()
-            installed_codes = {lang.code for lang in installed}
-            if src in installed_codes and tgt in installed_codes:
-                src_lang_obj = next(l for l in installed if l.code == src)
-                translations = src_lang_obj.get_translation(
-                    next(l for l in installed if l.code == tgt)
-                )
-                if translations is not None:
-                    self._installed_pairs.add((src, tgt))
-                    logger.info("Model đã có sẵn: %s → %s", src, tgt)
-                    continue
+            if self._is_pair_installed(src, tgt):
+                self._installed_pairs.add((src, tgt))
+                logger.info("Model đã có sẵn: %s → %s", src, tgt)
+                continue
 
-            # Cài đặt model
-            available = argostranslate.package.get_available_packages()
-            pkg = next(
-                (p for p in available if p.from_code == src and p.to_code == tgt),
-                None,
-            )
-            if pkg is None:
-                raise RuntimeError(
-                    f"Không tìm thấy model Argos cho {src} → {tgt}. "
-                    f"Vui lòng kiểm tra kết nối mạng."
-                )
-            logger.info("Đang tải model: %s → %s ...", src, tgt)
-            argostranslate.package.install_from_path(pkg.download())
+            # Ưu tiên cài từ file bundled
+            if self._install_from_bundled(src, tgt):
+                self._installed_pairs.add((src, tgt))
+                continue
+
+            # Fallback: tải online
+            logger.info("Không tìm thấy model bundled, thử tải online: %s → %s", src, tgt)
+            self._install_from_online(src, tgt)
             self._installed_pairs.add((src, tgt))
-            logger.info("Đã cài model: %s → %s", src, tgt)
+
+    @staticmethod
+    def _is_pair_installed(src: str, tgt: str) -> bool:
+        """Kiểm tra cặp ngôn ngữ đã được cài trong Argos chưa."""
+        import argostranslate.translate
+
+        installed = argostranslate.translate.get_installed_languages()
+        src_obj = next((l for l in installed if l.code == src), None)
+        tgt_obj = next((l for l in installed if l.code == tgt), None)
+        if src_obj is None or tgt_obj is None:
+            return False
+        return src_obj.get_translation(tgt_obj) is not None
+
+    @staticmethod
+    def _install_from_bundled(src: str, tgt: str) -> bool:
+        """Cài model từ file .argosmodel đóng gói sẵn.
+
+        Returns:
+            True nếu cài thành công, False nếu không tìm thấy file.
+        """
+        import argostranslate.package
+
+        filename = _MODEL_FILES.get((src, tgt))
+        if filename is None:
+            return False
+
+        model_path = _BUNDLED_MODELS_DIR / filename
+        if not model_path.is_file():
+            logger.warning("File model bundled không tồn tại: %s", model_path)
+            return False
+
+        logger.info("Cài model từ file bundled: %s", model_path.name)
+        argostranslate.package.install_from_path(model_path)
+        logger.info("Đã cài model bundled: %s → %s", src, tgt)
+        return True
+
+    @staticmethod
+    def _install_from_online(src: str, tgt: str) -> None:
+        """Tải và cài model từ Argos package index (online).
+
+        Raises:
+            RuntimeError: Nếu không tìm thấy model online.
+        """
+        import argostranslate.package
+
+        argostranslate.package.update_package_index()
+        available = argostranslate.package.get_available_packages()
+        pkg = next(
+            (p for p in available if p.from_code == src and p.to_code == tgt),
+            None,
+        )
+        if pkg is None:
+            raise RuntimeError(
+                f"Không tìm thấy model Argos cho {src} → {tgt}. "
+                f"Vui lòng đặt file model vào {_BUNDLED_MODELS_DIR} "
+                f"hoặc kiểm tra kết nối mạng."
+            )
+        logger.info("Đang tải model online: %s → %s ...", src, tgt)
+        argostranslate.package.install_from_path(pkg.download())
+        logger.info("Đã cài model online: %s → %s", src, tgt)
 
     def translate(self, text: str, source_lang: str, target_lang: str) -> str:
         """Dịch văn bản bằng Argos Translate.
