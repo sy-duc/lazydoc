@@ -59,8 +59,8 @@ class ExcelWriter(FileWriter):
                         if original.strip():
                             cell.value = translate_fn(original)
 
-            # Dịch shapes text (trong XML)
-            self._translate_shapes_xlsx(ws, translate_fn)
+            # Không dịch shapes text — openpyxl làm mất shapes khi
+            # truy cập _drawing nội bộ. Ưu tiên giữ nguyên shapes.
 
         # Dịch tên sheet
         for ws in wb.worksheets:

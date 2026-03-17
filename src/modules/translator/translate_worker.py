@@ -91,9 +91,9 @@ class TranslateWorker(QThread):
         if self._cancelled:
             return
 
-        # Bước 3: Tạo hàm dịch
+        # Bước 3: Tạo hàm dịch (không dùng glossary cho dịch offline)
         translate_fn = self._argos.create_translate_fn(
-            source_lang, self._target_lang, self._glossary
+            source_lang, self._target_lang
         )
 
         # Bước 4: Dịch từng file

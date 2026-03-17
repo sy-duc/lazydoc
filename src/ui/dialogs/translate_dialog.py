@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QProgressBar,
     QPushButton,
     QScrollArea,
@@ -573,8 +574,26 @@ class TranslateDialog(QDialog):
             f"{self._i18n.t('main.cost_label')}: ${cost:.4f}"
         )
 
-    def on_translate_done(self) -> None:
-        """Xử lý khi dịch hoàn tất."""
+    def on_translate_done(
+        self,
+        success_count: int = 0,
+        fail_count: int = 0,
+        output_dir: str = "",
+    ) -> None:
+        """Xử lý khi dịch hoàn tất.
+
+        Args:
+            success_count: Số file dịch thành công.
+            fail_count: Số file dịch thất bại.
+            output_dir: Đường dẫn thư mục chứa file output.
+        """
         self._set_processing(False)
         self._progress_bar.setValue(100)
         self._progress_bar.setVisible(True)
+
+        if success_count > 0:
+            msg = f"Đã dịch thành công {success_count} file."
+            if fail_count > 0:
+                msg += f"\n{fail_count} file thất bại."
+            msg += f"\n\nFile lưu tại:\n{output_dir}"
+            QMessageBox.information(self, "Dịch hoàn tất", msg)

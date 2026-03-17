@@ -371,7 +371,9 @@ class MainWindow(QWidget):
         # Kết nối TranslateModule → Dialog
         self._translate_module.progress_updated.connect(dialog.update_progress)
         self._translate_module.translate_completed.connect(
-            lambda s, f, _: dialog.on_translate_done()
+            lambda s, f, _: dialog.on_translate_done(
+                s, f, str(self._translate_module.output_dir)
+            )
         )
         self._translate_module.error_occurred.connect(
             lambda msg: self._on_translate_error(dialog, msg)
