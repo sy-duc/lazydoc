@@ -6,7 +6,6 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Signal
 
 from src.modules.glossary.glossary_manager import GlossaryManager
-from src.modules.translator.argos_engine import ArgosEngine
 from src.modules.translator.translate_worker import TranslateWorker
 
 logger = logging.getLogger(__name__)
@@ -56,7 +55,6 @@ class TranslateModule(QObject):
     def __init__(self, parent: QObject | None = None) -> None:
         """Khởi tạo TranslateModule."""
         super().__init__(parent)
-        self._argos = ArgosEngine()
         self._glossary = GlossaryManager()
         self._worker: TranslateWorker | None = None
         self._output_dir = _get_downloads_dir()
@@ -114,7 +112,6 @@ class TranslateModule(QObject):
             files=files,
             output_dir=self._output_dir,
             target_lang=target_lang,
-            argos_engine=self._argos,
             glossary_manager=self._glossary,
             parent=self,
         )

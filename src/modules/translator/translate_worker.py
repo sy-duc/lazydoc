@@ -42,7 +42,6 @@ class TranslateWorker(QThread):
         files: list[Path],
         output_dir: Path,
         target_lang: str,
-        argos_engine: ArgosEngine,
         glossary_manager: object | None = None,
         parent: object = None,
     ) -> None:
@@ -52,7 +51,6 @@ class TranslateWorker(QThread):
             files: Danh sách file cần dịch.
             output_dir: Thư mục đầu ra (Downloads).
             target_lang: Mã ngôn ngữ đích.
-            argos_engine: ArgosEngine instance.
             glossary_manager: GlossaryManager instance (tuỳ chọn).
             parent: QObject cha.
         """
@@ -60,7 +58,7 @@ class TranslateWorker(QThread):
         self._files = files
         self._output_dir = output_dir
         self._target_lang = target_lang
-        self._argos = argos_engine
+        self._argos: ArgosEngine | None = None
         self._glossary = glossary_manager
         self._cancelled = False
 
@@ -68,7 +66,12 @@ class TranslateWorker(QThread):
         """Thực thi toàn bộ pipeline dịch trên worker thread.
 
         Pipeline: detect ngôn ngữ → tải model → dịch từng file → ghi output.
+        ArgosEngine được tạo tại đây (trên worker thread) để tránh lỗi
+        SQLite cross-thread — Argos cache SQLite connection nội bộ.
         """
+        # Tạo ArgosEngine trên worker thread để tránh lỗi SQLite cross-thread
+        self._argos = ArgosEngine()
+
         # Bước 1: Phát hiện ngôn ngữ nguồn
         self.status_updated.emit("Đang phát hiện ngôn ngữ...")
         source_lang = self._detect_source_lang(self._files[0], self._target_lang)
