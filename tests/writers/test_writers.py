@@ -111,8 +111,9 @@ class TestExcelWriter:
             assert "[T]" in ws_out["A1"].value
             assert "[T]" in ws_out["B2"].value
             assert ws_out["A2"].value == 12345  # Số giữ nguyên
-            # Tên sheet đã dịch
-            assert "[T]" in wb_out.sheetnames[0]
+            # Tên sheet đã dịch (ký tự [ ] bị loại bỏ vì Excel không hỗ trợ)
+            assert "Báo cáo" in wb_out.sheetnames[0]
+            assert wb_out.sheetnames[0] != "Báo cáo"  # Đã dịch, khác gốc
             wb_out.close()
 
 
