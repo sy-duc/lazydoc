@@ -2,10 +2,24 @@
 
 import logging
 import re
+import sqlite3
 from pathlib import Path
 from typing import Callable
 
 logger = logging.getLogger(__name__)
+
+# Patch sqlite3.connect để cho phép sử dụng cross-thread.
+# Argos Translate cache SQLite connection ở module level, gây lỗi khi
+# chạy trên QThread (thread ID thay đổi giữa các lần chạy worker).
+_original_sqlite3_connect = sqlite3.connect
+
+
+def _sqlite3_connect_no_thread_check(*args: object, **kwargs: object) -> sqlite3.Connection:
+    kwargs["check_same_thread"] = False
+    return _original_sqlite3_connect(*args, **kwargs)
+
+
+sqlite3.connect = _sqlite3_connect_no_thread_check  # type: ignore[assignment]
 
 # Thư mục chứa model đóng gói sẵn trong project
 _BUNDLED_MODELS_DIR = Path(__file__).resolve().parents[3] / "resources" / "argos_models"
