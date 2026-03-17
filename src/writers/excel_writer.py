@@ -103,6 +103,16 @@ class ExcelWriter(FileWriter):
                     if translated_sheet is not None:
                         modified_files[name] = translated_sheet
 
+            # Dịch text trong shapes (drawings), bỏ qua charts
+            for name in zf_in.namelist():
+                if name.startswith("xl/drawings/") and name.endswith(".xml"):
+                    drawing_xml = zf_in.read(name)
+                    translated_drawing = self._translate_drawing_text_regex(
+                        drawing_xml, translate_fn
+                    )
+                    if translated_drawing is not None:
+                        modified_files[name] = translated_drawing
+
         self._replace_in_zip(output_path, modified_files)
         logger.info("Đã ghi file xlsx (ZIP mode): %s", output_path.name)
 
@@ -197,6 +207,38 @@ class ExcelWriter(FileWriter):
             return f"{open_is}{new_inner}{close_is}"
 
         translated = is_pattern.sub(_replace_is_block, xml_str)
+
+        if not has_changes:
+            return None
+        return translated.encode("utf-8")
+
+    @staticmethod
+    def _translate_drawing_text_regex(
+        xml_data: bytes, translate_fn: Callable[[str], str]
+    ) -> bytes | None:
+        """Dịch text trong drawing XML (shapes, textboxes) bằng regex.
+
+        Drawing XML chứa text trong thẻ <a:t>text</a:t> (namespace drawingML).
+        Chỉ dịch text, giữ nguyên mọi thứ khác (hình ảnh, biểu đồ ref, ...).
+        """
+        xml_str = xml_data.decode("utf-8")
+
+        # Match thẻ <a:t>text</a:t> hoặc <*:t>text</*:t> trong drawing
+        pattern = re.compile(r'(<(?:[\w.:]+)?t(?:\s[^>]*)?>)([^<]+)(</(?:[\w.:]+)?t>)')
+
+        has_changes = False
+
+        def _replace_text(match: re.Match) -> str:
+            nonlocal has_changes
+            open_tag = match.group(1)
+            text = match.group(2)
+            close_tag = match.group(3)
+            if text.strip():
+                has_changes = True
+                text = translate_fn(text)
+            return f"{open_tag}{text}{close_tag}"
+
+        translated = pattern.sub(_replace_text, xml_str)
 
         if not has_changes:
             return None
