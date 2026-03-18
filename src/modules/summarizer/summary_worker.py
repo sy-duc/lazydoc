@@ -46,7 +46,6 @@ class SummaryWorker(QThread):
         self,
         contents: dict[Path, ExtractedContent],
         provider: BaseProvider,
-        output_dir: Path,
         parent: object = None,
     ) -> None:
         """Khởi tạo SummaryWorker.
@@ -54,13 +53,11 @@ class SummaryWorker(QThread):
         Args:
             contents: Dict {file_path: ExtractedContent} từ extract cache.
             provider: BaseProvider instance cho AI summarization.
-            output_dir: Thư mục lưu file .md (Downloads).
             parent: QObject cha.
         """
         super().__init__(parent)
         self._contents = contents
         self._provider = provider
-        self._output_dir = output_dir
         self._cancelled = False
         config = ConfigManager()
         self._chunk_size: int = config.get("chunking.chunk_size", 100000)

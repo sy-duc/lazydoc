@@ -105,14 +105,10 @@ class SummaryModule(QObject):
             len(contents), provider.name, provider.model,
         )
 
-        # Đảm bảo thư mục output tồn tại
-        self._output_dir.mkdir(parents=True, exist_ok=True)
-
         # Khởi chạy worker
         self._worker = SummaryWorker(
             contents=contents,
             provider=provider,
-            output_dir=self._output_dir,
             parent=self,
         )
         self._worker.status_updated.connect(self._on_status_updated)
