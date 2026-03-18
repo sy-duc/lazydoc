@@ -82,9 +82,8 @@ class GearButton(QPushButton):
 
 
 class Toolbar(QWidget):
-    """Thanh công cụ: Xay, Tổng hợp, Dịch, Setting, Hướng dẫn, Thông tin."""
+    """Thanh công cụ: Tổng hợp, Dịch, Setting, Hướng dẫn, Thông tin."""
 
-    grind_clicked = Signal()
     summary_clicked = Signal()
     translate_clicked = Signal()
     settings_clicked = Signal()
@@ -105,13 +104,6 @@ class Toolbar(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 4, 0, 4)
         layout.setSpacing(8)
-
-        # Nút Xay (extract file thô)
-        self._grind_btn = QPushButton(f"🔄 {self._i18n.t('main.btn_grind')}")
-        self._grind_btn.setObjectName("grindBtn")
-        self._grind_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._grind_btn.clicked.connect(self.grind_clicked.emit)
-        layout.addWidget(self._grind_btn)
 
         # Nút Tổng hợp (AI summary)
         self._summary_btn = QPushButton(f"📋 {self._i18n.t('main.btn_summary')}")
@@ -154,21 +146,6 @@ class Toolbar(QWidget):
         self.setStyleSheet("""
             #toolbar {
                 background-color: transparent;
-            }
-            #grindBtn {
-                background-color: #a6e3a1;
-                color: #1e1e2e;
-                border: none;
-                border-radius: 8px;
-                padding: 8px 24px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            #grindBtn:hover {
-                background-color: #94e2d5;
-            }
-            #grindBtn:pressed {
-                background-color: #74c7ec;
             }
             #summaryBtn {
                 background-color: #cba6f7;
@@ -217,6 +194,5 @@ class Toolbar(QWidget):
         Args:
             processing: True để disable các nút khi đang xử lý.
         """
-        self._grind_btn.setEnabled(not processing)
         self._summary_btn.setEnabled(not processing)
         self._translate_btn.setEnabled(not processing)

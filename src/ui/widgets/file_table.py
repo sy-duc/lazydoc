@@ -208,7 +208,7 @@ class FileTable(QWidget):
         self._table.setItem(row, COL_SIZE, size_item)
 
         # Trạng thái ban đầu
-        self._table.setItem(row, COL_STATUS, QTableWidgetItem("Chờ xử lý"))
+        self._table.setItem(row, COL_STATUS, QTableWidgetItem("Chưa xử lý"))
 
         # Ngôn ngữ (trống ban đầu)
         self._table.setItem(row, COL_LANGUAGE, QTableWidgetItem(""))
