@@ -507,22 +507,27 @@ class SummaryWorker(QThread):
                 self.file_info_ready.emit(file_name, purpose, language)
 
     def _save_report(self, report: str) -> Path:
-        """Lưu báo cáo chi tiết vào file .md trong thư mục Downloads.
+        """Lưu báo cáo chi tiết vào file tạm (chưa download).
+
+        File sẽ được copy sang Downloads khi người dùng bấm "Chi tiết".
 
         Args:
             report: Nội dung báo cáo Markdown.
 
         Returns:
-            Đường dẫn file đã lưu.
+            Đường dẫn file tạm đã lưu.
         """
+        import tempfile
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"lazydoc_summary_{timestamp}.md"
-        md_path = self._output_dir / filename
+        tmp_dir = Path(tempfile.gettempdir()) / "lazydoc"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        tmp_path = tmp_dir / filename
 
-        self._output_dir.mkdir(parents=True, exist_ok=True)
-        md_path.write_text(report, encoding="utf-8")
-        logger.info("Đã lưu báo cáo tổng hợp: %s", md_path)
-        return md_path
+        tmp_path.write_text(report, encoding="utf-8")
+        logger.info("Đã lưu báo cáo tạm: %s", tmp_path)
+        return tmp_path
 
     # --- Utilities ---
 

@@ -130,7 +130,7 @@ class MainWindow(QWidget):
             #content {
                 background-color: #1e1e2e;
             }
-            QLabel {
+            #content QLabel {
                 color: #cdd6f4;
                 font-size: 13px;
             }
@@ -518,23 +518,41 @@ class MainWindow(QWidget):
                     self._file_table.update_file_status(f, "Đã summary")
 
     def _on_detail_clicked(self) -> None:
-        """Mở file .md chi tiết khi người dùng bấm nút 'Chi tiết'."""
+        """Copy file .md từ thư mục tạm sang Downloads và mở."""
         if not self._detail_md_path:
             return
 
-        path = Path(self._detail_md_path)
-        if not path.exists():
-            logger.warning("File báo cáo không tồn tại: %s", path)
+        import shutil
+
+        tmp_path = Path(self._detail_md_path)
+        if not tmp_path.exists():
+            logger.warning("File báo cáo tạm không tồn tại: %s", tmp_path)
             return
 
+        # Copy sang Downloads
+        downloads = self._summary_module.output_dir
+        downloads.mkdir(parents=True, exist_ok=True)
+        dest_path = downloads / tmp_path.name
+
+        # Tránh ghi đè
+        counter = 1
+        while dest_path.exists():
+            stem = tmp_path.stem
+            dest_path = downloads / f"{stem} ({counter}).md"
+            counter += 1
+
+        shutil.copy2(tmp_path, dest_path)
+        logger.info("Đã tải báo cáo về: %s", dest_path)
+
+        # Mở file
         try:
             if sys.platform == "win32":
                 import os
-                os.startfile(path)
+                os.startfile(dest_path)
             elif sys.platform == "darwin":
-                subprocess.Popen(["open", str(path)])
+                subprocess.Popen(["open", str(dest_path)])
             else:
-                subprocess.Popen(["xdg-open", str(path)])
+                subprocess.Popen(["xdg-open", str(dest_path)])
         except Exception as e:
             logger.error("Không thể mở file: %s", e)
 

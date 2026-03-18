@@ -3,6 +3,7 @@
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
+from src.core.config import ConfigManager
 from src.core.i18n import I18nManager
 
 
@@ -15,6 +16,8 @@ class CostTracker(QWidget):
         """Khởi tạo CostTracker."""
         super().__init__(parent)
         self._i18n = I18nManager()
+        self._config = ConfigManager()
+        self._usd_to_vnd: float = self._config.get("usd_to_vnd", 25800)
         self.setObjectName("costTracker")
         self.setFixedHeight(40)
         self._setup_ui()
@@ -32,7 +35,7 @@ class CostTracker(QWidget):
         layout.addWidget(self._token_label)
 
         # Label Chi phí
-        self._cost_label = QLabel(f"{self._i18n.t('main.cost_label')}: $0.00")
+        self._cost_label = QLabel(f"{self._i18n.t('main.cost_label')}: 0 đ")
         self._cost_label.setObjectName("costLabel")
         layout.addWidget(self._cost_label)
 
@@ -82,8 +85,9 @@ class CostTracker(QWidget):
             tokens: Số token đã sử dụng.
             cost: Chi phí tính bằng USD.
         """
+        vnd = cost * self._usd_to_vnd
         self._token_label.setText(f"{self._i18n.t('main.token_label')}: {tokens:,}")
-        self._cost_label.setText(f"{self._i18n.t('main.cost_label')}: ${cost:.4f}")
+        self._cost_label.setText(f"{self._i18n.t('main.cost_label')}: {vnd:,.0f} đ")
 
     def set_processing(self, processing: bool) -> None:
         """Bật/tắt trạng thái đang xử lý (hiện/ẩn nút Stop).
@@ -96,5 +100,5 @@ class CostTracker(QWidget):
     def reset(self) -> None:
         """Reset về trạng thái ban đầu."""
         self._token_label.setText(f"{self._i18n.t('main.token_label')}: 0")
-        self._cost_label.setText(f"{self._i18n.t('main.cost_label')}: $0.00")
+        self._cost_label.setText(f"{self._i18n.t('main.cost_label')}: 0 đ")
         self._stop_btn.hide()
