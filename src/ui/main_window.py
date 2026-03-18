@@ -337,11 +337,6 @@ class MainWindow(QWidget):
         """Cập nhật UI khi extract một file thành công."""
         self._file_table.update_file_status(file_path, "✓")
 
-        # Hiển thị metadata trên cột Ý nghĩa
-        meta_parts = [f"{k}: {v}" for k, v in content.metadata.items()]
-        meta_str = ", ".join(meta_parts) if meta_parts else "OK"
-        self._file_table.update_file_purpose(file_path, meta_str)
-
         # Chuẩn bị text tóm tắt cho file này
         parts: list[str] = []
 
@@ -368,7 +363,6 @@ class MainWindow(QWidget):
     def _on_extract_file_failed(self, file_path: Path, error_msg: str) -> None:
         """Cập nhật UI khi extract một file thất bại."""
         self._file_table.update_file_status(file_path, "✗")
-        self._file_table.update_file_purpose(file_path, error_msg[:80])
         self._extract_results.append(
             f"--- {file_path.name} ---\n[LỖI] {error_msg}"
         )
@@ -452,11 +446,9 @@ class MainWindow(QWidget):
     def _on_summary_file_info(
         self, file_name: str, purpose: str, language: str
     ) -> None:
-        """Cập nhật bảng file với ý nghĩa và ngôn ngữ từ AI phân tích."""
+        """Cập nhật bảng file với ngôn ngữ từ AI phân tích."""
         for f in self._grind_files:
             if f.name == file_name:
-                if purpose:
-                    self._file_table.update_file_purpose(f, purpose)
                 if language:
                     self._file_table.update_file_language(f, language)
                 break

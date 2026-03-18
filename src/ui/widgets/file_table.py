@@ -25,11 +25,10 @@ COL_SELECT = 0
 COL_FILENAME = 1
 COL_SIZE = 2
 COL_STATUS = 3
-COL_PURPOSE = 4
-COL_LANGUAGE = 5
-COL_DELETE = 6
+COL_LANGUAGE = 4
+COL_DELETE = 5
 
-NUM_COLUMNS = 7
+NUM_COLUMNS = 6
 
 
 def _format_file_size(size_bytes: int) -> str:
@@ -77,7 +76,6 @@ class FileTable(QWidget):
             self._i18n.t("main.col_filename"),
             self._i18n.t("main.col_size"),
             self._i18n.t("main.col_status"),
-            self._i18n.t("main.col_purpose"),
             self._i18n.t("main.col_language"),
             "",
         ]
@@ -86,15 +84,13 @@ class FileTable(QWidget):
         # Cấu hình header
         header = self._table.horizontalHeader()
         header.setSectionResizeMode(COL_SELECT, QHeaderView.ResizeMode.Fixed)
-        header.setSectionResizeMode(COL_FILENAME, QHeaderView.ResizeMode.Fixed)
+        header.setSectionResizeMode(COL_FILENAME, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(COL_SIZE, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(COL_STATUS, QHeaderView.ResizeMode.Fixed)
-        header.setSectionResizeMode(COL_PURPOSE, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(COL_LANGUAGE, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(COL_DELETE, QHeaderView.ResizeMode.Fixed)
 
         self._table.setColumnWidth(COL_SELECT, 50)
-        self._table.setColumnWidth(COL_FILENAME, 150)
         self._table.setColumnWidth(COL_SIZE, 70)
         self._table.setColumnWidth(COL_STATUS, 70)
         self._table.setColumnWidth(COL_LANGUAGE, 70)
@@ -214,9 +210,6 @@ class FileTable(QWidget):
         # Trạng thái (trống ban đầu)
         self._table.setItem(row, COL_STATUS, QTableWidgetItem(""))
 
-        # Ý nghĩa (trống ban đầu)
-        self._table.setItem(row, COL_PURPOSE, QTableWidgetItem(""))
-
         # Ngôn ngữ (trống ban đầu)
         self._table.setItem(row, COL_LANGUAGE, QTableWidgetItem(""))
 
@@ -285,19 +278,6 @@ class FileTable(QWidget):
             item = self._table.item(row, COL_STATUS)
             if item:
                 item.setText(status)
-
-    def update_file_purpose(self, path: Path, purpose: str) -> None:
-        """Cập nhật ý nghĩa/mục đích của file.
-
-        Args:
-            path: Đường dẫn file.
-            purpose: Ý nghĩa/mục đích.
-        """
-        if path in self._file_paths:
-            row = self._file_paths.index(path)
-            item = self._table.item(row, COL_PURPOSE)
-            if item:
-                item.setText(purpose)
 
     def update_file_language(self, path: Path, language: str) -> None:
         """Cập nhật ngôn ngữ của file.
