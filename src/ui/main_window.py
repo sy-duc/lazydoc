@@ -1,8 +1,6 @@
 """MainWindow — Màn hình chính của ứng dụng LazyDoc."""
 
 import logging
-import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -518,7 +516,7 @@ class MainWindow(QWidget):
                     self._file_table.update_file_status(f, "Đã summary")
 
     def _on_detail_clicked(self) -> None:
-        """Copy file .md từ thư mục tạm sang Downloads và mở."""
+        """Copy file .md từ thư mục tạm sang Downloads và thông báo."""
         if not self._detail_md_path:
             return
 
@@ -544,17 +542,11 @@ class MainWindow(QWidget):
         shutil.copy2(tmp_path, dest_path)
         logger.info("Đã tải báo cáo về: %s", dest_path)
 
-        # Mở file
-        try:
-            if sys.platform == "win32":
-                import os
-                os.startfile(dest_path)
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", str(dest_path)])
-            else:
-                subprocess.Popen(["xdg-open", str(dest_path)])
-        except Exception as e:
-            logger.error("Không thể mở file: %s", e)
+        QMessageBox.information(
+            self,
+            "Đã tải về",
+            f"File báo cáo đã được lưu tại:\n{dest_path}",
+        )
 
     def _reset_processing_ui(self) -> None:
         """Reset trạng thái UI về chế độ bình thường (không đang xử lý)."""

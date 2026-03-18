@@ -208,7 +208,7 @@ class FileTable(QWidget):
         self._table.setItem(row, COL_SIZE, size_item)
 
         # Trạng thái ban đầu (căn giữa)
-        status_item = QTableWidgetItem("Chưa xử lý")
+        status_item = QTableWidgetItem("Chưa extract")
         status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         self._table.setItem(row, COL_STATUS, status_item)
 
