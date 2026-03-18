@@ -1,6 +1,8 @@
 """MainWindow — Màn hình chính của ứng dụng LazyDoc."""
 
 import logging
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from src.core.i18n import I18nManager
 from src.modules.extract import ExtractModule
+from src.modules.summarizer import SummaryModule
 from src.modules.translator import TranslateModule
 from src.processors.base import ExtractedContent
 from src.processors.factory import ProcessorFactory
@@ -51,9 +54,13 @@ class MainWindow(QWidget):
         self._provider_manager = provider_manager or ProviderManager()
         self._drag_start_pos = None
         self._extract_results: list[str] = []
+        self._grind_files: list[Path] = []
+        self._grind_cancelled = False
+        self._detail_md_path: str = ""
         self._setup_window()
         self._setup_ui()
         self._setup_extract_module()
+        self._setup_summary_module()
         self._setup_translate_module()
         self._setup_provider_connections()
         self._setup_style()
@@ -227,11 +234,32 @@ class MainWindow(QWidget):
         self._extract_module.extract_completed.connect(self._on_extract_completed)
 
         # Kết nối nút Stop từ CostTracker
-        self._cost_tracker.stop_clicked.connect(self._on_extract_cancel)
+        self._cost_tracker.stop_clicked.connect(self._on_stop_clicked)
 
         # Xóa cache khi file bị xóa khỏi bảng
         self._file_table.file_removed.connect(self._extract_module.invalidate)
         self._file_table.file_removed.connect(self._on_file_removed)
+
+    def _setup_summary_module(self) -> None:
+        """Khởi tạo SummaryModule và kết nối signal."""
+        self._summary_module = SummaryModule(self)
+        self._summary_module.set_provider_manager(self._provider_manager)
+
+        # Streaming text → hiển thị trên UI với typing effect
+        self._summary_module.streaming_text.connect(self._on_summary_streaming)
+        # Trạng thái → cập nhật blender animation
+        self._summary_module.status_updated.connect(self._on_summary_status)
+        # Thông tin từng file → cập nhật bảng file
+        self._summary_module.file_info_ready.connect(self._on_summary_file_info)
+        # File .md chi tiết → lưu đường dẫn cho nút "Chi tiết"
+        self._summary_module.detail_file_ready.connect(self._on_summary_detail_ready)
+        # Chi phí → cập nhật token counter
+        self._summary_module.cost_updated.connect(self._on_summary_cost)
+        # Hoàn tất → reset UI
+        self._summary_module.summary_completed.connect(self._on_summary_completed)
+
+        # Nút "Chi tiết" → mở file .md
+        self._summary_area.detail_clicked.connect(self._on_detail_clicked)
 
     def _setup_translate_module(self) -> None:
         """Khởi tạo TranslateModule."""
@@ -260,7 +288,11 @@ class MainWindow(QWidget):
         overlay.deleteLater()
 
     def _on_grind(self) -> None:
-        """Bấm Xay → trigger Extract Module → cập nhật UI async."""
+        """Bấm Xay → Extract → Summary (nếu có AI provider).
+
+        Luồng: Extract file → nếu có provider → gọi AI tổng hợp (streaming).
+        Nếu không có provider → hiển thị kết quả extract như fallback.
+        """
         checked_files = self._file_table.get_checked_files()
         if not checked_files:
             self._summary_area.set_summary(
@@ -269,16 +301,24 @@ class MainWindow(QWidget):
             )
             return
 
-        if self._extract_module.is_running:
-            logger.warning("Extract đang chạy, bỏ qua.")
+        if self._extract_module.is_running or self._summary_module.is_running:
+            logger.warning("Đang xử lý, bỏ qua.")
             return
 
-        # Chuẩn bị UI cho quá trình extract
+        # Lưu danh sách file để dùng sau khi extract xong
+        self._grind_files = list(checked_files)
+        self._grind_cancelled = False
+        self._detail_md_path = ""
+
+        # Chuẩn bị UI
         self._extract_results.clear()
         self._blender.set_status("Extracting...")
         self._toolbar.set_processing(True)
         self._cost_tracker.set_processing(True)
         self._summary_area.clear()
+
+        # Reset token counter cho phiên mới
+        self._provider_manager.token_counter.reset()
 
         # Cập nhật trạng thái "đang chờ" cho các file checked
         for file_path in checked_files:
@@ -335,28 +375,147 @@ class MainWindow(QWidget):
         logger.error("Extract thất bại: %s — %s", file_path.name, error_msg)
 
     def _on_extract_completed(self, success_count: int, fail_count: int) -> None:
-        """Cập nhật UI khi toàn bộ extract hoàn tất."""
-        header = f"Extract hoàn tất: {success_count} thành công, {fail_count} thất bại\n\n"
-        summary_text = header + "\n\n".join(self._extract_results)
-        self._summary_area.set_summary(summary_text, typing_effect=True)
+        """Cập nhật UI khi toàn bộ extract hoàn tất.
 
-        self._blender.set_status("")
-        self._blender.play_done()
-        self._toolbar.set_processing(False)
-        self._cost_tracker.set_processing(False)
+        Nếu có AI provider và extract thành công → chuyển sang Summary.
+        Nếu không có provider → hiển thị kết quả extract (fallback).
+        """
+        # Nếu đã bị hủy → không tiếp tục
+        if self._grind_cancelled:
+            return
+
+        # Nếu không có file nào extract thành công → hiển thị kết quả và dừng
+        if success_count == 0:
+            header = f"Extract hoàn tất: 0 thành công, {fail_count} thất bại\n\n"
+            summary_text = header + "\n\n".join(self._extract_results)
+            self._summary_area.set_summary(summary_text, typing_effect=False)
+            self._reset_processing_ui()
+            return
+
+        # Kiểm tra AI provider
+        provider = self._provider_manager.provider
+        if not provider:
+            # Không có provider → hiển thị extract results như fallback
+            header = (
+                f"Extract hoàn tất: {success_count} thành công, {fail_count} thất bại\n"
+                "⚠️ Chưa cấu hình AI Provider. Vào Cài đặt để thêm API key.\n\n"
+            )
+            summary_text = header + "\n\n".join(self._extract_results)
+            self._summary_area.set_summary(summary_text, typing_effect=True)
+            self._reset_processing_ui()
+            return
+
+        # Thu thập nội dung đã extract thành công cho các file checked
+        contents: dict[Path, ExtractedContent] = {}
+        for f in self._grind_files:
+            cached = self._extract_module.get_cached(f)
+            if cached:
+                contents[f] = cached
+
+        if not contents:
+            self._summary_area.set_summary(
+                "Không có nội dung để tổng hợp.", typing_effect=False,
+            )
+            self._reset_processing_ui()
+            return
+
+        # Chuyển sang phase Summary → gọi AI tổng hợp
+        self._summary_module.start_summary(contents)
 
     def _on_file_removed(self, path: Path) -> None:
         """Ẩn bảng file khi không còn file nào."""
         if self._file_table.file_count == 0:
             self._file_table.setVisible(False)
 
-    def _on_extract_cancel(self) -> None:
-        """Xử lý khi người dùng bấm Stop trong lúc extract."""
+    def _on_stop_clicked(self) -> None:
+        """Xử lý khi người dùng bấm Stop — hủy extract hoặc summary đang chạy."""
+        self._grind_cancelled = True
+
         if self._extract_module.is_running:
             self._extract_module.cancel()
-            self._blender.set_status("")
-            self._toolbar.set_processing(False)
-            self._cost_tracker.set_processing(False)
+
+        if self._summary_module.is_running:
+            self._summary_module.cancel()
+
+        self._reset_processing_ui()
+
+    # --- Summary signal handlers ---
+
+    def _on_summary_streaming(self, text: str) -> None:
+        """Nhận text streaming từ AI → hiển thị lên vùng tóm tắt."""
+        self._summary_area.append_text(text)
+
+    def _on_summary_status(self, status: str) -> None:
+        """Cập nhật trạng thái blender animation khi summary đang chạy."""
+        self._blender.set_status(status)
+
+    def _on_summary_file_info(
+        self, file_name: str, purpose: str, language: str
+    ) -> None:
+        """Cập nhật bảng file với ý nghĩa và ngôn ngữ từ AI phân tích."""
+        for f in self._grind_files:
+            if f.name == file_name:
+                if purpose:
+                    self._file_table.update_file_purpose(f, purpose)
+                if language:
+                    self._file_table.update_file_language(f, language)
+                break
+
+    def _on_summary_detail_ready(self, md_path: str) -> None:
+        """Lưu đường dẫn file .md chi tiết cho nút 'Chi tiết'."""
+        self._detail_md_path = md_path
+        logger.info("Báo cáo chi tiết đã sẵn sàng: %s", md_path)
+
+    def _on_summary_cost(
+        self,
+        provider_name: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+    ) -> None:
+        """Cập nhật chi phí AI qua TokenCounter → CostTracker."""
+        self._provider_manager.token_counter.add_usage(
+            provider_name, model, input_tokens, output_tokens,
+        )
+
+    def _on_summary_completed(self, success: bool, error_msg: str) -> None:
+        """Xử lý khi tổng hợp hoàn tất hoặc thất bại."""
+        self._reset_processing_ui()
+
+        if not success and error_msg and error_msg != "Đã hủy":
+            self._summary_area.set_summary(
+                f"[LỖI] {error_msg}", typing_effect=False,
+            )
+            logger.error("Tổng hợp thất bại: %s", error_msg)
+        else:
+            self._blender.play_done()
+
+    def _on_detail_clicked(self) -> None:
+        """Mở file .md chi tiết khi người dùng bấm nút 'Chi tiết'."""
+        if not self._detail_md_path:
+            return
+
+        path = Path(self._detail_md_path)
+        if not path.exists():
+            logger.warning("File báo cáo không tồn tại: %s", path)
+            return
+
+        try:
+            if sys.platform == "win32":
+                import os
+                os.startfile(path)
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(path)])
+            else:
+                subprocess.Popen(["xdg-open", str(path)])
+        except Exception as e:
+            logger.error("Không thể mở file: %s", e)
+
+    def _reset_processing_ui(self) -> None:
+        """Reset trạng thái UI về chế độ bình thường (không đang xử lý)."""
+        self._blender.set_status("")
+        self._toolbar.set_processing(False)
+        self._cost_tracker.set_processing(False)
 
     def _open_translate(self) -> None:
         """Mở dialog dịch thuật với các file đã checked.
