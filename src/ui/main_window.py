@@ -149,26 +149,6 @@ class MainWindow(QWidget):
             QPushButton:pressed {
                 background-color: #313244;
             }
-            QMessageBox {
-                background-color: #262640;
-            }
-            QMessageBox QLabel {
-                color: #1e1e2e;
-                font-size: 13px;
-            }
-            QMessageBox QPushButton {
-                background-color: #45475a;
-                color: #cdd6f4;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-size: 13px;
-                font-weight: bold;
-                min-width: 60px;
-            }
-            QMessageBox QPushButton:hover {
-                background-color: #585b70;
-            }
         """)
 
     def _setup_provider_connections(self) -> None:
@@ -504,8 +484,9 @@ class MainWindow(QWidget):
                 break
 
     def _on_summary_detail_ready(self, md_path: str) -> None:
-        """Lưu đường dẫn file .md chi tiết cho nút 'Chi tiết'."""
+        """Lưu đường dẫn file .md chi tiết và hiển thị nút 'Chi tiết'."""
         self._detail_md_path = md_path
+        self._summary_area.show_detail_button()
         logger.info("Báo cáo chi tiết đã sẵn sàng: %s", md_path)
 
     def _on_summary_cost(

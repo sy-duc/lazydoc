@@ -99,7 +99,6 @@ class SummaryArea(QWidget):
             self._start_typing(text)
         else:
             self._text_area.setPlainText(text)
-        self._detail_btn.show()
 
     def _start_typing(self, text: str) -> None:
         """Bắt đầu hiệu ứng typing.
@@ -136,6 +135,9 @@ class SummaryArea(QWidget):
             text: Đoạn text cần thêm.
         """
         self._text_area.insertPlainText(text)
+
+    def show_detail_button(self) -> None:
+        """Hiển thị nút Chi tiết (chỉ gọi sau khi summary hoàn tất)."""
         self._detail_btn.show()
 
     def clear(self) -> None:

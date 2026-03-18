@@ -201,17 +201,21 @@ class FileTable(QWidget):
         name_item.setToolTip(str(path))
         self._table.setItem(row, COL_FILENAME, name_item)
 
-        # Kích thước
+        # Kích thước (căn giữa)
         size = path.stat().st_size
         size_item = QTableWidgetItem(_format_file_size(size))
-        size_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        size_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         self._table.setItem(row, COL_SIZE, size_item)
 
-        # Trạng thái ban đầu
-        self._table.setItem(row, COL_STATUS, QTableWidgetItem("Chưa xử lý"))
+        # Trạng thái ban đầu (căn giữa)
+        status_item = QTableWidgetItem("Chưa xử lý")
+        status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._table.setItem(row, COL_STATUS, status_item)
 
-        # Ngôn ngữ (trống ban đầu)
-        self._table.setItem(row, COL_LANGUAGE, QTableWidgetItem(""))
+        # Ngôn ngữ (căn giữa)
+        lang_item = QTableWidgetItem("")
+        lang_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._table.setItem(row, COL_LANGUAGE, lang_item)
 
         # Nút xóa
         delete_widget = QWidget()
