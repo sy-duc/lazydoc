@@ -34,11 +34,11 @@ class GeminiProvider(BaseProvider):
 
     @property
     def default_model(self) -> str:
-        return "gemini-1.5-flash"
+        return "gemini-2.0-flash"
 
     @property
     def supported_models(self) -> list[str]:
-        return ["gemini-1.5-flash", "gemini-1.5-pro"]
+        return ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash-preview-05-20"]
 
     def summarize(
         self,
