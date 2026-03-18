@@ -209,11 +209,23 @@ class BaseProvider(ABC):
             source_name = lang_names.get(source_lang, source_lang)
             sys_parts.append(f"Ngôn ngữ nguồn: {source_name}.")
 
-        if domain and domain != "Mặc định":
-            sys_parts.append(f"Lĩnh vực chuyên môn: {domain}.")
+        if domain and domain not in ("default", "Mặc định"):
+            domain_names = {
+                "it": "Công nghệ thông tin",
+                "medical": "Y tế",
+                "legal": "Pháp lý",
+                "financial": "Tài chính",
+                "engineering": "Kỹ thuật",
+            }
+            sys_parts.append(f"Lĩnh vực chuyên môn: {domain_names.get(domain, domain)}.")
 
-        if style and style != "Mặc định":
-            sys_parts.append(f"Văn phong dịch: {style}.")
+        if style and style not in ("default", "Mặc định"):
+            style_names = {
+                "report": "Báo cáo",
+                "concise": "Súc tích",
+                "literary": "Bay bổng",
+            }
+            sys_parts.append(f"Văn phong dịch: {style_names.get(style, style)}.")
 
         if context:
             sys_parts.append(f"Ngữ cảnh tài liệu: {context}")

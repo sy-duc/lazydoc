@@ -140,6 +140,26 @@ class MainWindow(QWidget):
             QPushButton:pressed {
                 background-color: #313244;
             }
+            QMessageBox {
+                background-color: #262640;
+            }
+            QMessageBox QLabel {
+                color: #1e1e2e;
+                font-size: 13px;
+            }
+            QMessageBox QPushButton {
+                background-color: #45475a;
+                color: #cdd6f4;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-size: 13px;
+                font-weight: bold;
+                min-width: 60px;
+            }
+            QMessageBox QPushButton:hover {
+                background-color: #585b70;
+            }
         """)
 
     def _setup_provider_connections(self) -> None:
@@ -215,6 +235,7 @@ class MainWindow(QWidget):
     def _setup_translate_module(self) -> None:
         """Khởi tạo TranslateModule."""
         self._translate_module = TranslateModule(self)
+        self._translate_module.set_provider_manager(self._provider_manager)
 
     # --- Slots ---
 
@@ -379,11 +400,41 @@ class MainWindow(QWidget):
             lambda msg: self._on_translate_error(dialog, msg)
         )
 
+        # Kết nối cost tracking cho smart mode
+        cost_handler = self._create_cost_handler(dialog)
+        self._translate_module.cost_updated.connect(cost_handler)
+
         dialog.exec()
 
         # Ngắt kết nối khi đóng dialog
         self._translate_module.progress_updated.disconnect(dialog.update_progress)
+        self._translate_module.cost_updated.disconnect(cost_handler)
         overlay.deleteLater()
+
+    def _create_cost_handler(self, dialog: TranslateDialog):
+        """Tạo handler cập nhật chi phí AI cho dialog dịch.
+
+        Args:
+            dialog: TranslateDialog cần cập nhật.
+
+        Returns:
+            Callable handler cho signal cost_updated.
+        """
+        accumulated = {"tokens": 0, "cost": 0.0}
+
+        def handler(
+            provider_name: str, model: str,
+            input_tokens: int, output_tokens: int,
+        ) -> None:
+            self._provider_manager.token_counter.add_usage(
+                provider_name, model, input_tokens, output_tokens,
+            )
+            stats = self._provider_manager.token_counter.stats
+            accumulated["tokens"] = stats.total_tokens
+            accumulated["cost"] = stats.total_cost
+            dialog.update_cost(accumulated["tokens"], accumulated["cost"])
+
+        return handler
 
     def _on_translate_error(self, dialog: TranslateDialog, msg: str) -> None:
         """Xử lý lỗi từ TranslateModule — reset dialog và hiển thị lỗi."""

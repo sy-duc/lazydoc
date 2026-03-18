@@ -347,6 +347,18 @@ class GlossaryDialog(QDialog):
             #cancelBtn:hover {
                 background-color: #585b70;
             }
+            QMessageBox {
+                background-color: #e0e0e0;
+            }
+            QMessageBox QLabel {
+                color: #1e1e2e;
+                font-size: 13px;
+            }
+            QMessageBox QPushButton {
+                background-color: #45475a;
+                color: #cdd6f4;
+                min-width: 60px;
+            }
         """.replace("__ARROW_URL__", arrow_url))
 
     # --- Helpers ---

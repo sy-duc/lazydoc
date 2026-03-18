@@ -41,6 +41,8 @@ class TranslateModule(QObject):
         translate_completed: Phát khi toàn bộ quá trình hoàn tất
             (int thành công, int thất bại, list[Path] output files).
         error_occurred: Phát khi có lỗi nghiêm trọng (str thông báo lỗi).
+        cost_updated: Phát khi cập nhật chi phí AI
+            (str provider, str model, int input_tokens, int output_tokens).
     """
 
     translate_started = Signal()
@@ -51,6 +53,7 @@ class TranslateModule(QObject):
     progress_updated = Signal(int)
     translate_completed = Signal(int, int, list)
     error_occurred = Signal(str)
+    cost_updated = Signal(str, str, int, int)
 
     def __init__(self, parent: QObject | None = None) -> None:
         """Khởi tạo TranslateModule."""
@@ -58,6 +61,7 @@ class TranslateModule(QObject):
         self._glossary = GlossaryManager()
         self._worker: TranslateWorker | None = None
         self._output_dir = _get_downloads_dir()
+        self._provider_manager = None
 
     @property
     def is_running(self) -> bool:
@@ -74,6 +78,14 @@ class TranslateModule(QObject):
         """Đặt thư mục output."""
         self._output_dir = path
 
+    def set_provider_manager(self, provider_manager: object) -> None:
+        """Đặt ProviderManager cho chế độ dịch thông minh.
+
+        Args:
+            provider_manager: ProviderManager instance.
+        """
+        self._provider_manager = provider_manager
+
     def start_translate(self, config: dict) -> None:
         """Bắt đầu dịch theo cấu hình từ TranslateDialog.
 
@@ -89,17 +101,23 @@ class TranslateModule(QObject):
         files: list[Path] = config["files"]
         target_lang: str = config["target_language"]
         mode: str = config.get("mode", "default")
+        domain: str | None = config.get("domain")
+        style: str | None = config.get("style")
 
         if not files:
             self.error_occurred.emit("Không có file nào để dịch.")
             return
 
-        if mode != "default":
-            self.error_occurred.emit(
-                "Chế độ dịch thông minh (AI) chưa được triển khai. "
-                "Vui lòng sử dụng chế độ Mặc định."
-            )
-            return
+        # Validate smart mode: cần AI Provider
+        provider = None
+        if mode == "smart":
+            if not self._provider_manager or not self._provider_manager.provider:
+                self.error_occurred.emit(
+                    "Chế độ Thông minh cần AI Provider. "
+                    "Vui lòng cấu hình API key trong Cài đặt."
+                )
+                return
+            provider = self._provider_manager.provider
 
         logger.info("Bắt đầu dịch %d file sang %s (chế độ: %s)", len(files), target_lang, mode)
 
@@ -112,7 +130,11 @@ class TranslateModule(QObject):
             files=files,
             output_dir=self._output_dir,
             target_lang=target_lang,
+            mode=mode,
             glossary_manager=self._glossary,
+            provider=provider,
+            domain=domain,
+            style=style,
             parent=self,
         )
         self._worker.status_updated.connect(self._on_status_updated)
@@ -122,6 +144,7 @@ class TranslateModule(QObject):
         self._worker.progress_updated.connect(self._on_progress_updated)
         self._worker.all_completed.connect(self._on_all_completed)
         self._worker.error_occurred.connect(self._on_error)
+        self._worker.cost_updated.connect(self._on_cost_updated)
         self._worker.finished.connect(self._cleanup_worker)
         self._worker.start()
 
@@ -159,6 +182,15 @@ class TranslateModule(QObject):
 
     def _on_error(self, msg: str) -> None:
         self.error_occurred.emit(msg)
+
+    def _on_cost_updated(self, input_tokens: int, output_tokens: int) -> None:
+        """Forward cost update từ worker, kèm thông tin provider/model."""
+        if self._provider_manager and self._provider_manager.provider:
+            provider = self._provider_manager.provider
+            self.cost_updated.emit(
+                provider.name, provider.model,
+                input_tokens, output_tokens,
+            )
 
     def _cleanup_worker(self) -> None:
         """Dọn dẹp worker sau khi kết thúc."""
