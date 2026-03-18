@@ -93,7 +93,7 @@ class FileTable(QWidget):
         header.setSectionResizeMode(COL_LANGUAGE, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(COL_DELETE, QHeaderView.ResizeMode.Fixed)
 
-        self._table.setColumnWidth(COL_SELECT, 40)
+        self._table.setColumnWidth(COL_SELECT, 50)
         self._table.setColumnWidth(COL_FILENAME, 150)
         self._table.setColumnWidth(COL_SIZE, 70)
         self._table.setColumnWidth(COL_STATUS, 70)
@@ -161,24 +161,26 @@ class FileTable(QWidget):
             }
         """)
 
-    def add_files(self, paths: list[Path]) -> None:
+    def add_files(self, paths: list[Path], checked: bool = False) -> None:
         """Thêm danh sách file vào bảng.
 
         Args:
             paths: Danh sách đường dẫn file.
+            checked: Tự động check file khi thêm vào.
         """
         for path in paths:
             if path in self._file_paths:
                 logger.info("File đã tồn tại trong bảng: %s", path.name)
                 continue
             self._file_paths.append(path)
-            self._add_row(path)
+            self._add_row(path, checked=checked)
 
-    def _add_row(self, path: Path) -> None:
+    def _add_row(self, path: Path, checked: bool = False) -> None:
         """Thêm một hàng vào bảng cho file.
 
         Args:
             path: Đường dẫn file.
+            checked: Tự động check checkbox.
         """
         row = self._table.rowCount()
         self._table.insertRow(row)
@@ -189,7 +191,7 @@ class FileTable(QWidget):
         checkbox_layout.setContentsMargins(0, 0, 0, 0)
         checkbox_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         checkbox = QCheckBox()
-        checkbox.setChecked(False)
+        checkbox.setChecked(checked)
         checkbox_layout.addWidget(checkbox)
         self._table.setCellWidget(row, COL_SELECT, checkbox_widget)
 

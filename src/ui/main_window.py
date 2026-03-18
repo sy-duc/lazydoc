@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent
 from PySide6.QtWidgets import (
     QHBoxLayout,
+    QMessageBox,
     QVBoxLayout,
     QWidget,
 )
@@ -193,7 +194,7 @@ class MainWindow(QWidget):
                 logger.warning("File không được hỗ trợ: %s", path.name)
 
         if files:
-            self._file_table.add_files(files)
+            self._file_table.add_files(files, checked=True)
             self._file_table.setVisible(True)
             self._blender.play_file_drop()
             self.files_added.emit(files)
@@ -439,6 +440,7 @@ class MainWindow(QWidget):
     def _on_translate_error(self, dialog: TranslateDialog, msg: str) -> None:
         """Xử lý lỗi từ TranslateModule — reset dialog và hiển thị lỗi."""
         dialog.on_translate_done()
+        QMessageBox.critical(dialog, "Lỗi dịch thuật", msg)
         self._summary_area.set_summary(f"[LỖI] {msg}", typing_effect=False)
         logger.error("Lỗi dịch thuật: %s", msg)
 

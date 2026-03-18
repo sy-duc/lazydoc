@@ -3,20 +3,27 @@
 import logging
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QRect, QSize, Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QComboBox,
     QDialog,
     QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
+    QLayout,
+    QLayoutItem,
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QRadioButton,
     QScrollArea,
+    QSizePolicy,
+    QStyle,
     QVBoxLayout,
     QWidget,
+    QWidgetItem,
 )
 
 from src.core.i18n import I18nManager
@@ -47,6 +54,74 @@ STYLES = [
     "concise",
     "literary",
 ]
+
+
+class FlowLayout(QLayout):
+    """Layout tự động xuống dòng khi không đủ chiều rộng."""
+
+    def __init__(self, parent: QWidget | None = None, spacing: int = 6) -> None:
+        super().__init__(parent)
+        self._items: list[QLayoutItem] = []
+        self._spacing = spacing
+
+    def addItem(self, item: QLayoutItem) -> None:
+        self._items.append(item)
+
+    def count(self) -> int:
+        return len(self._items)
+
+    def itemAt(self, index: int) -> QLayoutItem | None:
+        if 0 <= index < len(self._items):
+            return self._items[index]
+        return None
+
+    def takeAt(self, index: int) -> QLayoutItem | None:
+        if 0 <= index < len(self._items):
+            return self._items.pop(index)
+        return None
+
+    def hasHeightForWidth(self) -> bool:
+        return True
+
+    def heightForWidth(self, width: int) -> int:
+        return self._do_layout(QRect(0, 0, width, 0), test_only=True)
+
+    def sizeHint(self) -> QSize:
+        return self.minimumSize()
+
+    def minimumSize(self) -> QSize:
+        size = QSize()
+        for item in self._items:
+            size = size.expandedTo(item.minimumSize())
+        m = self.contentsMargins()
+        size += QSize(m.left() + m.right(), m.top() + m.bottom())
+        return size
+
+    def setGeometry(self, rect: QRect) -> None:
+        super().setGeometry(rect)
+        self._do_layout(rect, test_only=False)
+
+    def _do_layout(self, rect: QRect, test_only: bool) -> int:
+        m = self.contentsMargins()
+        effective = rect.adjusted(m.left(), m.top(), -m.right(), -m.bottom())
+        x = effective.x()
+        y = effective.y()
+        line_height = 0
+
+        for item in self._items:
+            size = item.sizeHint()
+            next_x = x + size.width() + self._spacing
+            if next_x - self._spacing > effective.right() and line_height > 0:
+                x = effective.x()
+                y += line_height + self._spacing
+                next_x = x + size.width() + self._spacing
+                line_height = 0
+            if not test_only:
+                item.setGeometry(QRect(x, y, size.width(), size.height()))
+            x = next_x
+            line_height = max(line_height, size.height())
+
+        return y + line_height - rect.y() + m.bottom()
 
 
 class TranslateDialog(QDialog):
@@ -191,55 +266,66 @@ class TranslateDialog(QDialog):
         expand_layout.setContentsMargins(0, 4, 0, 4)
         expand_layout.setSpacing(8)
 
-        # Chế độ dịch
-        mode_row = QHBoxLayout()
-        mode_row.setSpacing(10)
+        # Chế độ dịch (radio buttons)
         mode_lbl = QLabel(self._i18n.t("translate.mode"))
-        mode_lbl.setFixedWidth(100)
-        self._mode_combo = QComboBox()
-        self._mode_combo.setObjectName("modeCombo")
-        self._mode_combo.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._mode_combo.addItem(
-            self._i18n.t("translate.mode_default"), "default"
-        )
-        self._mode_combo.addItem(
-            self._i18n.t("translate.mode_smart"), "smart"
-        )
-        mode_row.addWidget(mode_lbl)
-        mode_row.addWidget(self._mode_combo, stretch=1)
-        expand_layout.addLayout(mode_row)
+        mode_lbl.setObjectName("sectionLabel")
+        expand_layout.addWidget(mode_lbl)
 
-        # Domain
-        domain_row = QHBoxLayout()
-        domain_row.setSpacing(10)
+        self._mode_group = QButtonGroup(self)
+        mode_container = QWidget()
+        mode_flow = FlowLayout(mode_container, spacing=8)
+        mode_options = [
+            ("default", self._i18n.t("translate.mode_default")),
+            ("smart", self._i18n.t("translate.mode_smart")),
+        ]
+        for i, (key, label) in enumerate(mode_options):
+            radio = QRadioButton(label)
+            radio.setObjectName("optionRadio")
+            radio.setProperty("option_value", key)
+            radio.setCursor(Qt.CursorShape.PointingHandCursor)
+            if i == 0:
+                radio.setChecked(True)
+            self._mode_group.addButton(radio, i)
+            mode_flow.addWidget(radio)
+        expand_layout.addWidget(mode_container)
+
+        # Lĩnh vực (radio buttons)
         domain_lbl = QLabel(self._i18n.t("translate.domain"))
-        domain_lbl.setFixedWidth(100)
-        self._domain_combo = QComboBox()
-        self._domain_combo.setObjectName("domainCombo")
-        self._domain_combo.setCursor(Qt.CursorShape.PointingHandCursor)
-        for domain_key in DOMAINS:
-            self._domain_combo.addItem(
-                self._i18n.t(f"translate.domain_{domain_key}"), domain_key
-            )
-        domain_row.addWidget(domain_lbl)
-        domain_row.addWidget(self._domain_combo, stretch=1)
-        expand_layout.addLayout(domain_row)
+        domain_lbl.setObjectName("sectionLabel")
+        expand_layout.addWidget(domain_lbl)
 
-        # Văn phong
-        style_row = QHBoxLayout()
-        style_row.setSpacing(10)
+        self._domain_group = QButtonGroup(self)
+        domain_container = QWidget()
+        domain_flow = FlowLayout(domain_container, spacing=8)
+        for i, domain_key in enumerate(DOMAINS):
+            radio = QRadioButton(self._i18n.t(f"translate.domain_{domain_key}"))
+            radio.setObjectName("optionRadio")
+            radio.setProperty("option_value", domain_key)
+            radio.setCursor(Qt.CursorShape.PointingHandCursor)
+            if i == 0:
+                radio.setChecked(True)
+            self._domain_group.addButton(radio, i)
+            domain_flow.addWidget(radio)
+        expand_layout.addWidget(domain_container)
+
+        # Văn phong (radio buttons)
         style_lbl = QLabel(self._i18n.t("translate.style"))
-        style_lbl.setFixedWidth(100)
-        self._style_combo = QComboBox()
-        self._style_combo.setObjectName("styleCombo")
-        self._style_combo.setCursor(Qt.CursorShape.PointingHandCursor)
-        for style_key in STYLES:
-            self._style_combo.addItem(
-                self._i18n.t(f"translate.style_{style_key}"), style_key
-            )
-        style_row.addWidget(style_lbl)
-        style_row.addWidget(self._style_combo, stretch=1)
-        expand_layout.addLayout(style_row)
+        style_lbl.setObjectName("sectionLabel")
+        expand_layout.addWidget(style_lbl)
+
+        self._style_group = QButtonGroup(self)
+        style_container = QWidget()
+        style_flow = FlowLayout(style_container, spacing=8)
+        for i, style_key in enumerate(STYLES):
+            radio = QRadioButton(self._i18n.t(f"translate.style_{style_key}"))
+            radio.setObjectName("optionRadio")
+            radio.setProperty("option_value", style_key)
+            radio.setCursor(Qt.CursorShape.PointingHandCursor)
+            if i == 0:
+                radio.setChecked(True)
+            self._style_group.addButton(radio, i)
+            style_flow.addWidget(radio)
+        expand_layout.addWidget(style_container)
 
         layout.addWidget(self._expand_area)
 
@@ -348,7 +434,7 @@ class TranslateDialog(QDialog):
                 color: #cdd6f4;
                 font-size: 13px;
             }
-            #langCombo, #modeCombo, #domainCombo, #styleCombo {
+            #langCombo {
                 background-color: #313244;
                 color: #cdd6f4;
                 border: 1px solid #45475a;
@@ -356,25 +442,42 @@ class TranslateDialog(QDialog):
                 padding: 6px 10px;
                 font-size: 13px;
             }
-            #langCombo::drop-down, #modeCombo::drop-down,
-            #domainCombo::drop-down, #styleCombo::drop-down {
+            #langCombo::drop-down {
                 border: none;
                 width: 24px;
             }
-            #langCombo::down-arrow, #modeCombo::down-arrow,
-            #domainCombo::down-arrow, #styleCombo::down-arrow {
+            #langCombo::down-arrow {
                 image: url(__ARROW_URL__);
                 width: 10px;
                 height: 6px;
                 margin-right: 8px;
             }
-            #langCombo QAbstractItemView, #modeCombo QAbstractItemView,
-            #domainCombo QAbstractItemView, #styleCombo QAbstractItemView {
+            #langCombo QAbstractItemView {
                 background-color: #313244;
                 color: #cdd6f4;
                 border: 1px solid #45475a;
                 selection-background-color: #45475a;
                 outline: none;
+            }
+            #optionRadio {
+                color: #cdd6f4;
+                font-size: 12px;
+                spacing: 6px;
+                padding: 4px 8px;
+            }
+            #optionRadio::indicator {
+                width: 14px;
+                height: 14px;
+                border: 2px solid #585b70;
+                border-radius: 9px;
+                background-color: transparent;
+            }
+            #optionRadio::indicator:checked {
+                background-color: #89b4fa;
+                border-color: #89b4fa;
+            }
+            #optionRadio:disabled {
+                color: #6c7086;
             }
             #expandArea {
                 background-color: #181825;
@@ -524,9 +627,9 @@ class TranslateDialog(QDialog):
         config = {
             "files": self._files,
             "target_language": self._lang_combo.currentData(),
-            "mode": self._mode_combo.currentData(),
-            "domain": self._domain_combo.currentData(),
-            "style": self._style_combo.currentData(),
+            "mode": self._mode_group.checkedButton().property("option_value"),
+            "domain": self._domain_group.checkedButton().property("option_value"),
+            "style": self._style_group.checkedButton().property("option_value"),
         }
         self._set_processing(True)
         self.translate_requested.emit(config)
@@ -555,6 +658,10 @@ class TranslateDialog(QDialog):
         self._glossary_btn.setEnabled(not processing)
         self._expand_btn.setEnabled(not processing)
         self._lang_combo.setEnabled(not processing)
+        # Disable/enable radio buttons
+        for group in (self._mode_group, self._domain_group, self._style_group):
+            for btn in group.buttons():
+                btn.setEnabled(not processing)
         self._stop_btn.setVisible(processing)
         self._progress_bar.setVisible(processing)
         self._cost_row.setVisible(processing)
@@ -603,9 +710,15 @@ class TranslateDialog(QDialog):
         self._progress_bar.setValue(100)
         self._progress_bar.setVisible(True)
 
-        if success_count > 0:
+        if success_count > 0 and fail_count == 0:
             msg = f"Đã dịch thành công {success_count} file."
-            if fail_count > 0:
-                msg += f"\n{fail_count} file thất bại."
             msg += f"\n\nFile lưu tại:\n{output_dir}"
             QMessageBox.information(self, "Dịch hoàn tất", msg)
+        elif success_count > 0 and fail_count > 0:
+            msg = f"Đã dịch thành công {success_count} file."
+            msg += f"\n{fail_count} file thất bại."
+            msg += f"\n\nFile lưu tại:\n{output_dir}"
+            QMessageBox.warning(self, "Dịch hoàn tất", msg)
+        elif fail_count > 0:
+            msg = f"Dịch thất bại {fail_count} file."
+            QMessageBox.critical(self, "Dịch thất bại", msg)
