@@ -35,6 +35,7 @@ class GeminiProvider(BaseProvider):
         self._api_key = api_key
         self._client = genai.Client(api_key=self._api_key)
         self._model = model or self._resolve_default_model()
+        logger.info("Gemini model đã chọn: %s", self._model)
 
     @property
     def name(self) -> str:
@@ -49,20 +50,31 @@ class GeminiProvider(BaseProvider):
         return self._fetch_available_models()
 
     def _resolve_default_model(self) -> str:
-        """Chọn model mặc định: ưu tiên flash nhẹ nhất từ API.
+        """Chọn model mặc định: ưu tiên flash version mới nhất.
+
+        Ưu tiên: flash (cân bằng giá/chất lượng) > pro > flash-lite.
+        Trong cùng loại, chọn version cao nhất (2.5 > 2.0 > 1.5).
+        Bỏ qua preview/experimental.
 
         Returns:
             Tên model mặc định.
         """
         models = self._fetch_available_models()
-        # Ưu tiên: flash (cân bằng giá/chất lượng) > flash-lite > pro
-        for keyword in ["flash-lite", "flash", "pro"]:
-            for m in models:
-                # Bỏ qua preview, experimental, và tránh match "flash-lite" khi tìm "flash"
-                if keyword in m and "preview" not in m and "exp" not in m \
-                        and (keyword != "flash" or "lite" not in m):
+        # Lọc bỏ preview, experimental
+        stable = [m for m in models if "preview" not in m and "exp" not in m]
+        if not stable:
+            return self._FALLBACK_MODEL
+
+        # Sắp xếp giảm dần theo version (gemini-2.5 > gemini-2.0 > gemini-1.5)
+        stable.sort(reverse=True)
+
+        # Ưu tiên: flash (không lite) > pro > flash-lite
+        for keyword, exclude in [("flash", "lite"), ("pro", None), ("flash-lite", None)]:
+            for m in stable:
+                if keyword in m and (exclude is None or exclude not in m):
                     return m
-        return models[0] if models else self._FALLBACK_MODEL
+
+        return stable[0]
 
     def _fetch_available_models(self) -> list[str]:
         """Lấy danh sách model từ API, cache kết quả.
