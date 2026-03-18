@@ -111,8 +111,9 @@ class MainWindow(QWidget):
         # Thanh công cụ
         self._toolbar = Toolbar()
         self._toolbar.settings_clicked.connect(self._open_settings)
-        self._toolbar.translate_clicked.connect(self._open_translate)
         self._toolbar.grind_clicked.connect(self._on_grind)
+        self._toolbar.summary_clicked.connect(self._on_summary)
+        self._toolbar.translate_clicked.connect(self._open_translate)
         self._blender.body_clicked.connect(self._on_grind)
         content_layout.addWidget(self._toolbar)
 
@@ -193,12 +194,25 @@ class MainWindow(QWidget):
         """Xử lý khi file được thả vào cửa sổ."""
         self._blender.set_drag_hover(False)
         files: list[Path] = []
+        unsupported: list[str] = []
+
         for url in event.mimeData().urls():
             path = Path(url.toLocalFile())
             if path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS:
                 files.append(path)
             elif path.is_file():
-                logger.warning("File không được hỗ trợ: %s", path.name)
+                unsupported.append(path.name)
+
+        # Thông báo file không hỗ trợ
+        if unsupported:
+            supported_list = ", ".join(sorted(SUPPORTED_EXTENSIONS))
+            file_list = "\n".join(f"• {n}" for n in unsupported)
+            QMessageBox.warning(
+                self,
+                "File không hỗ trợ",
+                f"Các file sau không được hỗ trợ:\n{file_list}\n\n"
+                f"Định dạng hỗ trợ: {supported_list}",
+            )
 
         if files:
             self._file_table.add_files(files, checked=True)
@@ -288,10 +302,10 @@ class MainWindow(QWidget):
         overlay.deleteLater()
 
     def _on_grind(self) -> None:
-        """Bấm Xay → Extract → Summary (nếu có AI provider).
+        """Bấm Xay → Extract only (đọc file thô, chưa gọi AI).
 
-        Luồng: Extract file → nếu có provider → gọi AI tổng hợp (streaming).
-        Nếu không có provider → hiển thị kết quả extract như fallback.
+        Chuyển đổi nội dung file sang dạng trung gian. Sau khi extract xong,
+        người dùng có thể chọn Tổng hợp hoặc Dịch.
         """
         checked_files = self._file_table.get_checked_files()
         if not checked_files:
@@ -305,10 +319,9 @@ class MainWindow(QWidget):
             logger.warning("Đang xử lý, bỏ qua.")
             return
 
-        # Lưu danh sách file để dùng sau khi extract xong
+        # Lưu danh sách file
         self._grind_files = list(checked_files)
         self._grind_cancelled = False
-        self._detail_md_path = ""
 
         # Chuẩn bị UI
         self._extract_results.clear()
@@ -317,25 +330,82 @@ class MainWindow(QWidget):
         self._cost_tracker.set_processing(True)
         self._summary_area.clear()
 
-        # Reset token counter cho phiên mới
+        # Cập nhật trạng thái
+        for file_path in checked_files:
+            self._file_table.update_file_status(file_path, "Đang đọc...")
+
+        # Bắt đầu extract (async trên QThread)
+        self._extract_module.start_extract(checked_files)
+
+    def _on_summary(self) -> None:
+        """Bấm Tổng hợp → gọi AI tổng hợp thông tin (yêu cầu đã extract).
+
+        Kiểm tra file đã được extract chưa. Nếu chưa → thông báo.
+        Nếu rồi → gọi AI Provider tổng hợp.
+        """
+        checked_files = self._file_table.get_checked_files()
+        if not checked_files:
+            self._summary_area.set_summary(
+                self._i18n.t("main.no_file_selected"),
+                typing_effect=False,
+            )
+            return
+
+        # Kiểm tra file đã extract chưa
+        uncached = [
+            f for f in checked_files
+            if self._extract_module.get_cached(f) is None
+        ]
+        if uncached:
+            names = ", ".join(f.name for f in uncached[:3])
+            suffix = f" và {len(uncached) - 3} file khác" if len(uncached) > 3 else ""
+            self._summary_area.set_summary(
+                f"Cần Xay trước khi Tổng hợp. File chưa trích xuất: {names}{suffix}",
+                typing_effect=False,
+            )
+            return
+
+        # Kiểm tra provider
+        if not self._provider_manager.provider:
+            self._summary_area.set_summary(
+                "Chưa cấu hình AI Provider. Vào Cài đặt để thêm API key.",
+                typing_effect=False,
+            )
+            return
+
+        if self._summary_module.is_running:
+            logger.warning("Tổng hợp đang chạy, bỏ qua.")
+            return
+
+        # Thu thập nội dung đã extract
+        self._grind_files = list(checked_files)
+        self._grind_cancelled = False
+        self._detail_md_path = ""
+        contents: dict[Path, ExtractedContent] = {}
+        for f in checked_files:
+            cached = self._extract_module.get_cached(f)
+            if cached:
+                contents[f] = cached
+
+        # Chuẩn bị UI
+        self._blender.set_status("Analysing...")
+        self._toolbar.set_processing(True)
+        self._cost_tracker.set_processing(True)
+        self._summary_area.clear()
         self._provider_manager.token_counter.reset()
 
-        # Cập nhật trạng thái "đang chờ" cho các file checked
-        for file_path in checked_files:
-            self._file_table.update_file_status(file_path, "⏳")
-
-        # Bắt đầu extract qua module (async trên QThread)
-        self._extract_module.start_extract(checked_files)
+        # Bắt đầu tổng hợp
+        self._summary_module.start_summary(contents)
 
     def _on_extract_file_started(self, file_path: Path) -> None:
         """Cập nhật UI khi bắt đầu extract một file."""
-        self._file_table.update_file_status(file_path, "⏳")
+        self._file_table.update_file_status(file_path, "Đang đọc...")
 
     def _on_extract_file_completed(
         self, file_path: Path, content: ExtractedContent
     ) -> None:
         """Cập nhật UI khi extract một file thành công."""
-        self._file_table.update_file_status(file_path, "✓")
+        self._file_table.update_file_status(file_path, "Đã trích xuất")
 
         # Chuẩn bị text tóm tắt cho file này
         parts: list[str] = []
@@ -362,7 +432,7 @@ class MainWindow(QWidget):
 
     def _on_extract_file_failed(self, file_path: Path, error_msg: str) -> None:
         """Cập nhật UI khi extract một file thất bại."""
-        self._file_table.update_file_status(file_path, "✗")
+        self._file_table.update_file_status(file_path, "Lỗi đọc")
         self._extract_results.append(
             f"--- {file_path.name} ---\n[LỖI] {error_msg}"
         )
@@ -371,50 +441,29 @@ class MainWindow(QWidget):
     def _on_extract_completed(self, success_count: int, fail_count: int) -> None:
         """Cập nhật UI khi toàn bộ extract hoàn tất.
 
-        Nếu có AI provider và extract thành công → chuyển sang Summary.
-        Nếu không có provider → hiển thị kết quả extract (fallback).
+        Hiển thị thông báo kết quả và hướng dẫn bước tiếp theo.
         """
-        # Nếu đã bị hủy → không tiếp tục
         if self._grind_cancelled:
             return
 
-        # Nếu không có file nào extract thành công → hiển thị kết quả và dừng
+        self._reset_processing_ui()
+        self._blender.play_done()
+
+        # Thông báo kết quả extract
         if success_count == 0:
-            header = f"Extract hoàn tất: 0 thành công, {fail_count} thất bại\n\n"
-            summary_text = header + "\n\n".join(self._extract_results)
-            self._summary_area.set_summary(summary_text, typing_effect=False)
-            self._reset_processing_ui()
+            msg = f"Trích xuất thất bại toàn bộ {fail_count} file."
+            self._summary_area.set_summary(msg, typing_effect=False)
             return
 
-        # Kiểm tra AI provider
-        provider = self._provider_manager.provider
-        if not provider:
-            # Không có provider → hiển thị extract results như fallback
-            header = (
-                f"Extract hoàn tất: {success_count} thành công, {fail_count} thất bại\n"
-                "⚠️ Chưa cấu hình AI Provider. Vào Cài đặt để thêm API key.\n\n"
-            )
-            summary_text = header + "\n\n".join(self._extract_results)
-            self._summary_area.set_summary(summary_text, typing_effect=True)
-            self._reset_processing_ui()
-            return
+        file_names = ", ".join(f.name for f in self._grind_files[:5])
+        if len(self._grind_files) > 5:
+            file_names += f" và {len(self._grind_files) - 5} file khác"
 
-        # Thu thập nội dung đã extract thành công cho các file checked
-        contents: dict[Path, ExtractedContent] = {}
-        for f in self._grind_files:
-            cached = self._extract_module.get_cached(f)
-            if cached:
-                contents[f] = cached
-
-        if not contents:
-            self._summary_area.set_summary(
-                "Không có nội dung để tổng hợp.", typing_effect=False,
-            )
-            self._reset_processing_ui()
-            return
-
-        # Chuyển sang phase Summary → gọi AI tổng hợp
-        self._summary_module.start_summary(contents)
+        msg = f"Đã trích xuất thành công {success_count} file: {file_names}"
+        if fail_count > 0:
+            msg += f"\n({fail_count} file lỗi)"
+        msg += "\n\nBước tiếp theo: bấm Tổng hợp để AI phân tích, hoặc Dịch để dịch tài liệu."
+        self._summary_area.set_summary(msg, typing_effect=False)
 
     def _on_file_removed(self, path: Path) -> None:
         """Ẩn bảng file khi không còn file nào."""
@@ -481,6 +530,10 @@ class MainWindow(QWidget):
             logger.error("Tổng hợp thất bại: %s", error_msg)
         else:
             self._blender.play_done()
+            # Cập nhật trạng thái file → "Đã tổng hợp"
+            if success:
+                for f in self._grind_files:
+                    self._file_table.update_file_status(f, "Đã tổng hợp")
 
     def _on_detail_clicked(self) -> None:
         """Mở file .md chi tiết khi người dùng bấm nút 'Chi tiết'."""
@@ -528,8 +581,10 @@ class MainWindow(QWidget):
             if self._extract_module.get_cached(f) is None
         ]
         if uncached:
+            names = ", ".join(f.name for f in uncached[:3])
+            suffix = f" và {len(uncached) - 3} file khác" if len(uncached) > 3 else ""
             self._summary_area.set_summary(
-                self._i18n.t("main.extract_before_translate"),
+                f"Cần Xay trước khi Dịch. File chưa trích xuất: {names}{suffix}",
                 typing_effect=False,
             )
             return

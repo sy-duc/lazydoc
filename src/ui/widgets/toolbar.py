@@ -82,9 +82,10 @@ class GearButton(QPushButton):
 
 
 class Toolbar(QWidget):
-    """Thanh công cụ: Xay, Dịch, Setting, Hướng dẫn, Thông tin."""
+    """Thanh công cụ: Xay, Tổng hợp, Dịch, Setting, Hướng dẫn, Thông tin."""
 
     grind_clicked = Signal()
+    summary_clicked = Signal()
     translate_clicked = Signal()
     settings_clicked = Signal()
     guide_clicked = Signal()
@@ -105,12 +106,19 @@ class Toolbar(QWidget):
         layout.setContentsMargins(0, 4, 0, 4)
         layout.setSpacing(8)
 
-        # Nút Summary (tổng hợp AI)
-        self._grind_btn = QPushButton(f"📋 {self._i18n.t('main.btn_summary')}")
+        # Nút Xay (extract file thô)
+        self._grind_btn = QPushButton(f"🔄 {self._i18n.t('main.btn_grind')}")
         self._grind_btn.setObjectName("grindBtn")
         self._grind_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._grind_btn.clicked.connect(self.grind_clicked.emit)
         layout.addWidget(self._grind_btn)
+
+        # Nút Tổng hợp (AI summary)
+        self._summary_btn = QPushButton(f"📋 {self._i18n.t('main.btn_summary')}")
+        self._summary_btn.setObjectName("summaryBtn")
+        self._summary_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._summary_btn.clicked.connect(self.summary_clicked.emit)
+        layout.addWidget(self._summary_btn)
 
         # Nút Dịch
         self._translate_btn = QPushButton(f"🌐 {self._i18n.t('main.btn_translate')}")
@@ -162,6 +170,21 @@ class Toolbar(QWidget):
             #grindBtn:pressed {
                 background-color: #74c7ec;
             }
+            #summaryBtn {
+                background-color: #cba6f7;
+                color: #1e1e2e;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 24px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            #summaryBtn:hover {
+                background-color: #b4befe;
+            }
+            #summaryBtn:pressed {
+                background-color: #89b4fa;
+            }
             #translateBtn {
                 background-color: #89b4fa;
                 color: #1e1e2e;
@@ -195,4 +218,5 @@ class Toolbar(QWidget):
             processing: True để disable các nút khi đang xử lý.
         """
         self._grind_btn.setEnabled(not processing)
+        self._summary_btn.setEnabled(not processing)
         self._translate_btn.setEnabled(not processing)

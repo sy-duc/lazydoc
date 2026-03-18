@@ -13,7 +13,7 @@ class TxtProcessor(FileProcessor):
 
     @property
     def supported_extensions(self) -> list[str]:
-        return [".txt"]
+        return [".txt", ".md"]
 
     def extract(self, file_path: Path) -> ExtractedContent:
         """Đọc toàn bộ nội dung file .txt.

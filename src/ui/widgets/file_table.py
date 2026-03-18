@@ -92,8 +92,8 @@ class FileTable(QWidget):
 
         self._table.setColumnWidth(COL_SELECT, 50)
         self._table.setColumnWidth(COL_SIZE, 70)
-        self._table.setColumnWidth(COL_STATUS, 70)
-        self._table.setColumnWidth(COL_LANGUAGE, 70)
+        self._table.setColumnWidth(COL_STATUS, 120)
+        self._table.setColumnWidth(COL_LANGUAGE, 100)
         self._table.setColumnWidth(COL_DELETE, 40)
 
         # Cấu hình bảng
@@ -207,8 +207,8 @@ class FileTable(QWidget):
         size_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self._table.setItem(row, COL_SIZE, size_item)
 
-        # Trạng thái (trống ban đầu)
-        self._table.setItem(row, COL_STATUS, QTableWidgetItem(""))
+        # Trạng thái ban đầu
+        self._table.setItem(row, COL_STATUS, QTableWidgetItem("Chờ xử lý"))
 
         # Ngôn ngữ (trống ban đầu)
         self._table.setItem(row, COL_LANGUAGE, QTableWidgetItem(""))

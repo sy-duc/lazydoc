@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 # Định dạng file được hỗ trợ, nhóm theo loại processor
 SUPPORTED_EXTENSIONS: dict[str, list[str]] = {
-    "txt": [".txt"],
+    "txt": [".txt", ".md"],
     "csv": [".csv"],
     "excel": [".xlsx", ".xls"],
     "word": [".docx", ".doc"],

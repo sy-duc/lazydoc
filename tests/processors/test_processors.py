@@ -34,8 +34,9 @@ class TestTxtProcessor:
 
     def test_supported_extensions(self) -> None:
         processor = TxtProcessor()
-        assert processor.supported_extensions == [".txt"]
+        assert processor.supported_extensions == [".txt", ".md"]
         assert processor.can_process(Path("file.txt"))
+        assert processor.can_process(Path("file.md"))
         assert not processor.can_process(Path("file.csv"))
 
 
