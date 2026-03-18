@@ -18,15 +18,23 @@ class GeminiProvider(BaseProvider):
     Sử dụng google-genai SDK với streaming response.
     """
 
+    # Fallback hardcode khi không thể gọi API lấy danh sách model
+    _FALLBACK_MODEL = "gemini-2.5-flash"
+    _FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"]
+
+    # Cache danh sách model (class-level, share giữa các instance)
+    _cached_models: list[str] | None = None
+
     def __init__(self, api_key: str, model: str | None = None) -> None:
         """Khởi tạo GeminiProvider.
 
         Args:
             api_key: Google AI API key.
-            model: Tên model Gemini. Mặc định: gemini-1.5-flash.
+            model: Tên model Gemini. Nếu None, tự chọn từ API.
         """
-        super().__init__(api_key, model)
+        self._api_key = api_key
         self._client = genai.Client(api_key=self._api_key)
+        self._model = model or self._resolve_default_model()
 
     @property
     def name(self) -> str:
@@ -34,11 +42,56 @@ class GeminiProvider(BaseProvider):
 
     @property
     def default_model(self) -> str:
-        return "gemini-2.5-flash"
+        return self._resolve_default_model()
 
     @property
     def supported_models(self) -> list[str]:
-        return ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"]
+        return self._fetch_available_models()
+
+    def _resolve_default_model(self) -> str:
+        """Chọn model mặc định: ưu tiên flash nhẹ nhất từ API.
+
+        Returns:
+            Tên model mặc định.
+        """
+        models = self._fetch_available_models()
+        # Ưu tiên: flash (cân bằng giá/chất lượng) > flash-lite > pro
+        for keyword in ["flash-lite", "flash", "pro"]:
+            for m in models:
+                # Bỏ qua preview, experimental, và tránh match "flash-lite" khi tìm "flash"
+                if keyword in m and "preview" not in m and "exp" not in m \
+                        and (keyword != "flash" or "lite" not in m):
+                    return m
+        return models[0] if models else self._FALLBACK_MODEL
+
+    def _fetch_available_models(self) -> list[str]:
+        """Lấy danh sách model từ API, cache kết quả.
+
+        Returns:
+            Danh sách tên model hỗ trợ generateContent.
+        """
+        if GeminiProvider._cached_models is not None:
+            return GeminiProvider._cached_models
+
+        try:
+            models = []
+            for m in self._client.models.list():
+                model_id = m.name.replace("models/", "")
+                actions = m.supported_actions or []
+                if "gemini" in model_id and any(
+                    "generateContent" in a for a in actions
+                ):
+                    models.append(model_id)
+
+            if models:
+                GeminiProvider._cached_models = sorted(models)
+                logger.info("Gemini models available: %s", models)
+                return GeminiProvider._cached_models
+        except Exception as e:
+            logger.warning("Không thể lấy danh sách model Gemini: %s. Dùng fallback.", e)
+
+        GeminiProvider._cached_models = self._FALLBACK_MODELS
+        return GeminiProvider._cached_models
 
     def summarize(
         self,
