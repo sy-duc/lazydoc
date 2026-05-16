@@ -35,8 +35,7 @@ class SummaryModule(QObject):
 
     Signals:
         status_updated: Phát khi cập nhật trạng thái (str thông báo).
-        streaming_text: Phát text streaming cho UI typing effect (str chunk).
-        file_info_ready: Phát thông tin từng file (str tên_file, str ý_nghĩa, str ngôn_ngữ).
+        report_ready: Phát toàn bộ báo cáo sau khi sinh xong (str full_report).
         detail_file_ready: Phát đường dẫn file .md (str path).
         cost_updated: Phát token usage kèm thông tin provider
             (str provider_name, str model, int input_tokens, int output_tokens).
@@ -44,8 +43,7 @@ class SummaryModule(QObject):
     """
 
     status_updated = Signal(str)
-    streaming_text = Signal(str)
-    file_info_ready = Signal(str, str, str)
+    report_ready = Signal(str)
     detail_file_ready = Signal(str)
     cost_updated = Signal(str, str, int, int)
     summary_completed = Signal(bool, str)
@@ -112,8 +110,7 @@ class SummaryModule(QObject):
             parent=self,
         )
         self._worker.status_updated.connect(self._on_status_updated)
-        self._worker.streaming_text.connect(self._on_streaming_text)
-        self._worker.file_info_ready.connect(self._on_file_info_ready)
+        self._worker.report_ready.connect(self._on_report_ready)
         self._worker.detail_file_ready.connect(self._on_detail_file_ready)
         self._worker.cost_updated.connect(self._on_cost_updated)
         self._worker.completed.connect(self._on_completed)
@@ -131,13 +128,8 @@ class SummaryModule(QObject):
     def _on_status_updated(self, msg: str) -> None:
         self.status_updated.emit(msg)
 
-    def _on_streaming_text(self, text: str) -> None:
-        self.streaming_text.emit(text)
-
-    def _on_file_info_ready(
-        self, file_name: str, purpose: str, language: str
-    ) -> None:
-        self.file_info_ready.emit(file_name, purpose, language)
+    def _on_report_ready(self, full_report: str) -> None:
+        self.report_ready.emit(full_report)
 
     def _on_detail_file_ready(self, md_path: str) -> None:
         self.detail_file_ready.emit(md_path)

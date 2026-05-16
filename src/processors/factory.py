@@ -14,7 +14,6 @@ SUPPORTED_EXTENSIONS: dict[str, list[str]] = {
     "excel": [".xlsx", ".xls"],
     "word": [".docx", ".doc"],
     "powerpoint": [".pptx", ".ppt"],
-    "pdf": [".pdf"],
     "image": [".png", ".jpg", ".jpeg", ".bmp", ".gif"],
 }
 
@@ -66,9 +65,6 @@ class ProcessorFactory:
         elif processor_type == "powerpoint":
             from src.processors.powerpoint_processor import PowerPointProcessor
             return PowerPointProcessor()
-        elif processor_type == "pdf":
-            from src.processors.pdf_processor import PdfProcessor
-            return PdfProcessor()
         elif processor_type == "image":
             from src.processors.image_processor import ImageProcessor
             return ImageProcessor()

@@ -1,13 +1,13 @@
-"""CostTracker — Vùng theo dõi chi phí và token realtime."""
+"""CostTracker — Vùng chứa nút Stop khi đang xử lý."""
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QPushButton, QWidget
 
 from src.core.i18n import I18nManager
 
 
 class CostTracker(QWidget):
-    """Vùng hiển thị chi phí API realtime + nút Stop."""
+    """Vùng hiển thị nút Stop khi đang xử lý."""
 
     stop_clicked = Signal()
 
@@ -21,15 +21,10 @@ class CostTracker(QWidget):
         self._setup_style()
 
     def _setup_ui(self) -> None:
-        """Thiết lập layout vùng chi phí."""
+        """Thiết lập layout."""
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 0, 8, 0)
         layout.setSpacing(16)
-
-        # Label Token
-        self._token_label = QLabel(f"{self._i18n.t('main.token_label')}: 0")
-        self._token_label.setObjectName("tokenLabel")
-        layout.addWidget(self._token_label)
 
         layout.addStretch()
 
@@ -49,13 +44,6 @@ class CostTracker(QWidget):
                 border: 1px solid #313244;
                 border-radius: 6px;
             }
-            #tokenLabel {
-                color: #a6adc8;
-                font-size: 12px;
-                font-family: monospace;
-                background: transparent;
-                border: none;
-            }
             #stopBtn {
                 background-color: #f38ba8;
                 color: #1e1e2e;
@@ -70,15 +58,6 @@ class CostTracker(QWidget):
             }
         """)
 
-    def update_cost(self, tokens: int, cost: float) -> None:
-        """Cập nhật hiển thị token.
-
-        Args:
-            tokens: Số token đã sử dụng.
-            cost: Chi phí (không hiển thị).
-        """
-        self._token_label.setText(f"{self._i18n.t('main.token_label')}: {tokens:,}")
-
     def set_processing(self, processing: bool) -> None:
         """Bật/tắt trạng thái đang xử lý (hiện/ẩn nút Stop).
 
@@ -89,5 +68,4 @@ class CostTracker(QWidget):
 
     def reset(self) -> None:
         """Reset về trạng thái ban đầu."""
-        self._token_label.setText(f"{self._i18n.t('main.token_label')}: 0")
         self._stop_btn.hide()

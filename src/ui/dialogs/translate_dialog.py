@@ -3,7 +3,7 @@
 import logging
 from pathlib import Path
 
-from PySide6.QtCore import QRect, QSize, Qt, Signal
+from PySide6.QtCore import QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -15,15 +15,11 @@ from PySide6.QtWidgets import (
     QLayout,
     QLayoutItem,
     QMessageBox,
-    QProgressBar,
     QPushButton,
     QRadioButton,
     QScrollArea,
-    QSizePolicy,
-    QStyle,
     QVBoxLayout,
     QWidget,
-    QWidgetItem,
 )
 
 from src.core.i18n import I18nManager
@@ -147,6 +143,7 @@ class TranslateDialog(QDialog):
         self._i18n = I18nManager()
         self._files = files
         self._is_processing = False
+        self._fun_timers: list[QTimer] = []
         self._setup_window()
         self._setup_ui()
         self._setup_style()
@@ -331,38 +328,12 @@ class TranslateDialog(QDialog):
 
         layout.addStretch()
 
-        # Thanh tiến độ
-        self._progress_bar = QProgressBar()
-        self._progress_bar.setObjectName("progressBar")
-        self._progress_bar.setRange(0, 100)
-        self._progress_bar.setValue(0)
-        self._progress_bar.setTextVisible(True)
-        self._progress_bar.setFormat("%p%")
-        self._progress_bar.setVisible(False)
-        layout.addWidget(self._progress_bar)
-
-        # Chi phí realtime
-        self._cost_row = QWidget()
-        self._cost_row.setObjectName("costRow")
-        self._cost_row.setVisible(False)
-        cost_layout = QHBoxLayout(self._cost_row)
-        cost_layout.setContentsMargins(0, 0, 0, 0)
-        cost_layout.setSpacing(16)
-
-        self._token_label = QLabel(
-            f"{self._i18n.t('main.token_label')}: 0"
-        )
-        self._token_label.setObjectName("costInfo")
-        cost_layout.addWidget(self._token_label)
-
-        self._cost_label = QLabel(
-            f"{self._i18n.t('main.cost_label')}: $0.0000"
-        )
-        self._cost_label.setObjectName("costInfo")
-        cost_layout.addWidget(self._cost_label)
-
-        cost_layout.addStretch()
-        layout.addWidget(self._cost_row)
+        # Label trạng thái vui nhộn (thay thế progress bar)
+        self._status_label = QLabel("Đang dịch...")
+        self._status_label.setObjectName("statusLabel")
+        self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._status_label.setVisible(False)
+        layout.addWidget(self._status_label)
 
         # Hàng nút dưới cùng: Dịch + Dừng + Hủy
         btn_row = QHBoxLayout()
@@ -555,22 +526,11 @@ class TranslateDialog(QDialog):
             #cancelBtn:hover {
                 background-color: #585b70;
             }
-            #progressBar {
-                background-color: #313244;
-                border: none;
-                border-radius: 4px;
-                height: 8px;
-                text-align: center;
-                font-size: 10px;
+            #statusLabel {
                 color: #a6adc8;
-            }
-            #progressBar::chunk {
-                background-color: #89b4fa;
-                border-radius: 4px;
-            }
-            #costInfo {
-                color: #a6adc8;
-                font-size: 11px;
+                font-size: 12px;
+                font-style: italic;
+                padding: 4px 0;
             }
             QMessageBox {
                 background-color: #e0e0e0;
@@ -663,35 +623,47 @@ class TranslateDialog(QDialog):
             for btn in group.buttons():
                 btn.setEnabled(not processing)
         self._stop_btn.setVisible(processing)
-        self._progress_bar.setVisible(processing)
-        self._cost_row.setVisible(processing)
+        self._status_label.setVisible(processing)
 
-        if not processing:
-            self._progress_bar.setValue(0)
+        if processing:
+            self._status_label.setText("Đang dịch...")
+            self._start_fun_timers()
+        else:
+            self._stop_fun_timers()
+
+    def _start_fun_timers(self) -> None:
+        """Bắt đầu chuỗi thông báo vui nhộn theo thời gian."""
+        self._stop_fun_timers()
+        messages = [
+            (10_000, "Sắp xong, chờ chút nhé..."),
+            (30_000, "File hơi lớn nên dịch hơi lâu, đợi chút nha!"),
+            (60_000, "Cảm ơn bạn đã kiên nhẫn! Gần xong rồi..."),
+            (120_000, "Vẫn đang cố gắng hết sức, bạn ơi..."),
+        ]
+        for delay_ms, msg in messages:
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.setInterval(delay_ms)
+            timer.timeout.connect(lambda m=msg: self._status_label.setText(m))
+            self._fun_timers.append(timer)
+            timer.start()
+
+    def _stop_fun_timers(self) -> None:
+        """Dừng tất cả timer thông báo."""
+        for timer in self._fun_timers:
+            timer.stop()
+        self._fun_timers.clear()
 
     # --- Public API ---
 
-    def update_progress(self, percent: int) -> None:
-        """Cập nhật thanh tiến độ.
+    def update_status(self, msg: str) -> None:
+        """Cập nhật thông báo trạng thái dịch.
 
         Args:
-            percent: Phần trăm hoàn thành (0-100).
+            msg: Thông báo trạng thái từ worker.
         """
-        self._progress_bar.setValue(percent)
-
-    def update_cost(self, tokens: int, cost: float) -> None:
-        """Cập nhật chi phí realtime.
-
-        Args:
-            tokens: Số token đã sử dụng.
-            cost: Chi phí tính bằng USD.
-        """
-        self._token_label.setText(
-            f"{self._i18n.t('main.token_label')}: {tokens:,}"
-        )
-        self._cost_label.setText(
-            f"{self._i18n.t('main.cost_label')}: ${cost:.4f}"
-        )
+        if self._is_processing:
+            self._status_label.setText(msg)
 
     def on_translate_done(
         self,
@@ -707,8 +679,6 @@ class TranslateDialog(QDialog):
             output_dir: Đường dẫn thư mục chứa file output.
         """
         self._set_processing(False)
-        self._progress_bar.setValue(100)
-        self._progress_bar.setVisible(True)
 
         if success_count > 0 and fail_count == 0:
             msg = f"Đã dịch thành công {success_count} file."

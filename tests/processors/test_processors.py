@@ -8,7 +8,6 @@ from src.processors.csv_processor import CsvProcessor
 from src.processors.excel_processor import ExcelProcessor
 from src.processors.word_processor import WordProcessor
 from src.processors.powerpoint_processor import PowerPointProcessor
-from src.processors.pdf_processor import PdfProcessor
 from src.processors.image_processor import ImageProcessor
 from src.processors.factory import ProcessorFactory
 
@@ -81,8 +80,10 @@ class TestExcelProcessor:
         processor = ExcelProcessor()
         result = processor.extract(f)
         assert result.metadata["sheets"] == 1
-        assert "Sheet1" in result.text_content
-        assert "Alice" in result.text_content["Sheet1"]
+        # Dữ liệu Excel nằm trong tables (không còn text_content để tránh gửi 2 lần lên AI)
+        assert "Sheet1" in result.tables
+        sheet_table = result.tables["Sheet1"][0]
+        assert any("Alice" in row for row in sheet_table)
 
     def test_extract_xlsx_multi_sheet(self, tmp_path: Path) -> None:
         import openpyxl
@@ -98,8 +99,8 @@ class TestExcelProcessor:
         processor = ExcelProcessor()
         result = processor.extract(f)
         assert result.metadata["sheets"] == 2
-        assert "Dữ liệu" in result.text_content
-        assert "Tổng hợp" in result.text_content
+        assert "Dữ liệu" in result.tables
+        assert "Tổng hợp" in result.tables
 
     def test_extract_xlsx_merge_cells(self, tmp_path: Path) -> None:
         import openpyxl
@@ -113,7 +114,11 @@ class TestExcelProcessor:
 
         processor = ExcelProcessor()
         result = processor.extract(f)
-        assert "Tiêu đề gộp" in result.text_content["Sheet"]
+        sheet_name = result.metadata["sheet_names"]
+        assert sheet_name in result.tables
+        table_rows = result.tables[sheet_name][0]
+        all_cells = [cell for row in table_rows for cell in row]
+        assert "Tiêu đề gộp" in all_cells
 
     def test_supported_extensions(self) -> None:
         processor = ExcelProcessor()
@@ -134,8 +139,9 @@ class TestWordProcessor:
 
         processor = WordProcessor()
         result = processor.extract(f)
-        assert "Đoạn văn thứ nhất" in result.text_content["main"]
-        assert "Đoạn văn thứ hai" in result.text_content["main"]
+        # Prose text lưu dưới key "prose" (tách riêng với "tables" để tránh trùng lặp)
+        assert "Đoạn văn thứ nhất" in result.text_content["prose"]
+        assert "Đoạn văn thứ hai" in result.text_content["prose"]
 
     def test_extract_docx_with_table(self, tmp_path: Path) -> None:
         import docx
@@ -152,7 +158,7 @@ class TestWordProcessor:
         processor = WordProcessor()
         result = processor.extract(f)
         assert result.metadata["tables"] == 1
-        assert "main" in result.tables
+        assert "tables" in result.tables
 
 
 class TestPowerPointProcessor:
@@ -185,14 +191,6 @@ class TestPowerPointProcessor:
         processor = PowerPointProcessor()
         result = processor.extract(f)
         assert result.metadata["slides"] == 3
-
-
-class TestPdfProcessor:
-    """Test PdfProcessor."""
-
-    def test_supported_extensions(self) -> None:
-        processor = PdfProcessor()
-        assert processor.supported_extensions == [".pdf"]
 
 
 class TestImageProcessor:

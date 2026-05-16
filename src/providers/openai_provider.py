@@ -10,22 +10,34 @@ from src.providers.base import BaseProvider, StreamChunk
 
 logger = logging.getLogger(__name__)
 
+# Từ khóa lọc model chat completion (bỏ embedding, whisper, tts, realtime)
+_EXCLUDE_KEYWORDS = ("audio", "realtime", "whisper", "embedding", "tts", "dall-e", "babbage", "davinci")
+
 
 class OpenAIProvider(BaseProvider):
     """AI Provider sử dụng OpenAI API.
 
     Sử dụng openai SDK với streaming response.
+    Tự động chọn model mới nhất từ API, fallback về gpt-4o-mini nếu lỗi.
     """
+
+    _FALLBACK_MODEL = "gpt-4o-mini"
+    _FALLBACK_MODELS = ["gpt-4o", "gpt-4o-mini"]
+
+    # Cache danh sách model (class-level, share giữa các instance)
+    _cached_models: list[str] | None = None
 
     def __init__(self, api_key: str, model: str | None = None) -> None:
         """Khởi tạo OpenAIProvider.
 
         Args:
             api_key: OpenAI API key.
-            model: Tên model OpenAI. Mặc định: gpt-4o-mini.
+            model: Tên model OpenAI. Nếu None, tự chọn model mới nhất.
         """
-        super().__init__(api_key, model)
+        self._api_key = api_key
         self._client = OpenAI(api_key=self._api_key)
+        self._model = model or self._resolve_default_model()
+        logger.info("OpenAI model đã chọn: %s", self._model)
 
     @property
     def name(self) -> str:
@@ -33,11 +45,55 @@ class OpenAIProvider(BaseProvider):
 
     @property
     def default_model(self) -> str:
-        return "gpt-4o-mini"
+        return self._resolve_default_model()
 
     @property
     def supported_models(self) -> list[str]:
-        return ["gpt-4o", "gpt-4o-mini"]
+        return self._fetch_available_models()
+
+    def _resolve_default_model(self) -> str:
+        """Chọn model mặc định: ưu tiên gpt-4o-mini, rồi gpt-4o.
+
+        Returns:
+            Tên model mặc định.
+        """
+        models = self._fetch_available_models()
+        # Ưu tiên gpt-4o-mini (cân bằng giá/chất lượng) trước
+        for preferred in ("gpt-4o-mini", "gpt-4o"):
+            if preferred in models:
+                return preferred
+        # Fallback: model gpt-4 đầu tiên
+        gpt4_models = [m for m in models if "gpt-4" in m]
+        return gpt4_models[0] if gpt4_models else self._FALLBACK_MODEL
+
+    def _fetch_available_models(self) -> list[str]:
+        """Lấy danh sách model chat completion từ API, cache kết quả.
+
+        Returns:
+            Danh sách tên model hỗ trợ chat completion.
+        """
+        if OpenAIProvider._cached_models is not None:
+            return OpenAIProvider._cached_models
+
+        try:
+            models = []
+            for m in self._client.models.list():
+                model_id = m.id
+                if not model_id.startswith("gpt-"):
+                    continue
+                if any(kw in model_id for kw in _EXCLUDE_KEYWORDS):
+                    continue
+                models.append(model_id)
+
+            if models:
+                OpenAIProvider._cached_models = sorted(models)
+                logger.info("OpenAI models available: %s", models)
+                return OpenAIProvider._cached_models
+        except Exception as e:
+            logger.warning("Không thể lấy danh sách model OpenAI: %s. Dùng fallback.", e)
+
+        OpenAIProvider._cached_models = list(self._FALLBACK_MODELS)
+        return OpenAIProvider._cached_models
 
     def summarize(
         self,
@@ -101,7 +157,6 @@ class OpenAIProvider(BaseProvider):
                 if chunk.choices and chunk.choices[0].delta.content:
                     yield StreamChunk(text=chunk.choices[0].delta.content)
 
-                # Usage info ở chunk cuối cùng (khi include_usage=True)
                 if chunk.usage:
                     yield StreamChunk(
                         is_final=True,
@@ -154,7 +209,6 @@ class OpenAIProvider(BaseProvider):
                 if chunk.choices and chunk.choices[0].delta.content:
                     yield StreamChunk(text=chunk.choices[0].delta.content)
 
-                # Usage info ở chunk cuối
                 if chunk.usage:
                     yield StreamChunk(
                         is_final=True,

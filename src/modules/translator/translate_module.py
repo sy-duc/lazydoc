@@ -103,6 +103,7 @@ class TranslateModule(QObject):
         mode: str = config.get("mode", "default")
         domain: str | None = config.get("domain")
         style: str | None = config.get("style")
+        context: str | None = config.get("context")
 
         if not files:
             self.error_occurred.emit("Không có file nào để dịch.")
@@ -135,6 +136,7 @@ class TranslateModule(QObject):
             provider=provider,
             domain=domain,
             style=style,
+            context=context,
             parent=self,
         )
         self._worker.status_updated.connect(self._on_status_updated)

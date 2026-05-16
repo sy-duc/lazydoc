@@ -14,7 +14,7 @@ class TxtWriter(FileWriter):
 
     @property
     def supported_extensions(self) -> list[str]:
-        return [".txt"]
+        return [".txt", ".md"]
 
     def write_translated(
         self,

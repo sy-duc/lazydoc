@@ -44,17 +44,11 @@ class CsvProcessor(FileProcessor):
         for row in csv.reader(text_raw.splitlines(), dialect=dialect):
             rows.append(row)
 
-        # Tạo text dạng readable (dùng tab)
-        text_lines = []
-        for row in rows:
-            text_lines.append("\t".join(row))
-        text_content = "\n".join(text_lines)
-
         content = ExtractedContent(
             file_path=file_path,
             file_name=file_path.name,
             file_size=file_path.stat().st_size,
-            text_content={"main": text_content},
+            text_content={},
             tables={"main": [rows]},
             metadata={"rows": len(rows), "columns": len(rows[0]) if rows else 0},
         )

@@ -26,18 +26,18 @@ class TestProcessorFactory:
     def test_is_supported_case_insensitive(self) -> None:
         assert ProcessorFactory.is_supported("file.TXT") is True
         assert ProcessorFactory.is_supported("file.Xlsx") is True
-        assert ProcessorFactory.is_supported("file.PDF") is True
+        assert ProcessorFactory.is_supported("file.PNG") is True
 
     def test_get_supported_extensions(self) -> None:
         extensions = ProcessorFactory.get_supported_extensions()
         assert isinstance(extensions, list)
         assert ".txt" in extensions
-        assert ".pdf" in extensions
         assert ".xlsx" in extensions
         assert ".docx" in extensions
         assert ".pptx" in extensions
         assert ".png" in extensions
         assert ".csv" in extensions
+        assert ".pdf" not in extensions
         # Phải được sắp xếp
         assert extensions == sorted(extensions)
 
@@ -70,11 +70,9 @@ class TestProcessorFactory:
             ProcessorFactory.get_processor("slide.pptx")
             mock.assert_called_once_with("powerpoint")
 
-    def test_get_processor_pdf(self) -> None:
-        with patch("src.processors.factory.ProcessorFactory._create_processor") as mock:
-            mock.return_value = "pdf_processor"
+    def test_get_processor_pdf_unsupported(self) -> None:
+        with pytest.raises(ValueError, match="không được hỗ trợ"):
             ProcessorFactory.get_processor("document.pdf")
-            mock.assert_called_once_with("pdf")
 
     def test_get_processor_image(self) -> None:
         with patch("src.processors.factory.ProcessorFactory._create_processor") as mock:

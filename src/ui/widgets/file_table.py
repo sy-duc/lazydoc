@@ -25,10 +25,9 @@ COL_SELECT = 0
 COL_FILENAME = 1
 COL_SIZE = 2
 COL_STATUS = 3
-COL_LANGUAGE = 4
-COL_DELETE = 5
+COL_DELETE = 4
 
-NUM_COLUMNS = 6
+NUM_COLUMNS = 5
 
 
 def _format_file_size(size_bytes: int) -> str:
@@ -76,7 +75,6 @@ class FileTable(QWidget):
             self._i18n.t("main.col_filename"),
             self._i18n.t("main.col_size"),
             self._i18n.t("main.col_status"),
-            self._i18n.t("main.col_language"),
             "",
         ]
         self._table.setHorizontalHeaderLabels(headers)
@@ -87,13 +85,11 @@ class FileTable(QWidget):
         header.setSectionResizeMode(COL_FILENAME, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(COL_SIZE, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(COL_STATUS, QHeaderView.ResizeMode.Fixed)
-        header.setSectionResizeMode(COL_LANGUAGE, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(COL_DELETE, QHeaderView.ResizeMode.Fixed)
 
         self._table.setColumnWidth(COL_SELECT, 50)
         self._table.setColumnWidth(COL_SIZE, 70)
         self._table.setColumnWidth(COL_STATUS, 120)
-        self._table.setColumnWidth(COL_LANGUAGE, 100)
         self._table.setColumnWidth(COL_DELETE, 40)
 
         # Cấu hình bảng
@@ -212,11 +208,6 @@ class FileTable(QWidget):
         status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         self._table.setItem(row, COL_STATUS, status_item)
 
-        # Ngôn ngữ (căn giữa)
-        lang_item = QTableWidgetItem("")
-        lang_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._table.setItem(row, COL_LANGUAGE, lang_item)
-
         # Nút xóa
         delete_widget = QWidget()
         delete_layout = QHBoxLayout(delete_widget)
@@ -282,19 +273,6 @@ class FileTable(QWidget):
             item = self._table.item(row, COL_STATUS)
             if item:
                 item.setText(status)
-
-    def update_file_language(self, path: Path, language: str) -> None:
-        """Cập nhật ngôn ngữ của file.
-
-        Args:
-            path: Đường dẫn file.
-            language: Ngôn ngữ phát hiện được.
-        """
-        if path in self._file_paths:
-            row = self._file_paths.index(path)
-            item = self._table.item(row, COL_LANGUAGE)
-            if item:
-                item.setText(language)
 
     def clear_all(self) -> None:
         """Xóa toàn bộ file trong bảng."""

@@ -1,7 +1,7 @@
 """SummaryWorker — Worker thread cho quá trình tổng hợp tài liệu."""
 
 import logging
-import re
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -14,30 +14,215 @@ from src.providers.token_counter import estimate_tokens
 
 logger = logging.getLogger(__name__)
 
+# Retry config (giống ai_engine.py)
+_MAX_RETRIES = 3
+_RETRY_BASE_DELAY = 2.0
+
+_RETRYABLE_KEYWORDS = (
+    "timeout", "timed out", "connection", "reset by peer",
+    "rate limit", "too many requests", "overloaded", "unavailable",
+    "503", "502", "504", "429",
+)
+
+
+def _is_retryable(e: Exception) -> bool:
+    """Kiểm tra lỗi có thể retry không."""
+    s = str(e).lower()
+    return any(kw in s for kw in _RETRYABLE_KEYWORDS)
+
+
+_HTML_TEMPLATE = """\
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Báo cáo tổng hợp - LazyDoc</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({{startOnLoad:true, theme:'neutral', securityLevel:'loose'}});</script>
+<style>
+  body {{ font-family: 'Segoe UI', Arial, sans-serif; max-width: 960px; margin: 40px auto; padding: 0 24px; color: #24273a; line-height: 1.7; background: #eff1f5; }}
+  h1 {{ color: #1e66f5; border-bottom: 3px solid #1e66f5; padding-bottom: 8px; }}
+  h2 {{ color: #179299; margin-top: 36px; border-left: 4px solid #179299; padding-left: 12px; }}
+  h3 {{ color: #8839ef; margin-top: 24px; }}
+  hr {{ border: none; border-top: 1px solid #ccd0da; margin: 24px 0; }}
+  ul {{ padding-left: 20px; }}
+  li {{ margin: 4px 0; }}
+  ul.checklist {{ list-style: none; padding-left: 4px; }}
+  ul.checklist li {{ display: flex; align-items: flex-start; gap: 8px; }}
+  strong {{ color: #d20f39; }}
+  pre {{ background: #e6e9ef; border-radius: 8px; padding: 12px 16px; overflow-x: auto; }}
+  code {{ background: #ccd0da; border-radius: 4px; padding: 1px 5px; font-family: monospace; font-size: 0.9em; }}
+  pre code {{ background: none; padding: 0; }}
+  .mermaid {{ background: #fff; border-radius: 10px; padding: 20px; margin: 20px 0; overflow-x: auto; border: 1px solid #ccd0da; text-align: center; }}
+  .qa-section {{ margin-top: 48px; border-top: 3px solid #fe640b; padding-top: 24px; }}
+  .qa-section h2 {{ color: #fe640b; border-left-color: #fe640b; }}
+  .qa-q {{ background: #e6e9ef; border-radius: 8px; padding: 10px 16px; margin: 16px 0 4px; font-weight: bold; }}
+  .qa-q::before {{ content: "❓ "; }}
+  .qa-a {{ background: #fff; border-radius: 8px; padding: 10px 16px; margin: 0 0 16px; border-left: 3px solid #179299; white-space: pre-wrap; }}
+</style>
+</head>
+<body>
+<div class="container">
+{body}
+</div>
+</body>
+</html>"""
+
+
+def _md_to_html(md_text: str, qa_history: list[tuple[str, str]] | None = None) -> str:
+    """Chuyển đổi Markdown sang HTML có style, hỗ trợ Mermaid diagram.
+
+    Mermaid code block (```mermaid) được render thành <div class="mermaid">
+    để Mermaid.js CDN xử lý khi mở file trong browser.
+
+    Args:
+        md_text: Nội dung Markdown (có thể chứa mermaid blocks).
+        qa_history: Danh sách [(câu_hỏi, câu_trả_lời)] để thêm vào cuối.
+
+    Returns:
+        HTML đầy đủ với DOCTYPE, styling, và Mermaid.js CDN.
+    """
+    import html as html_lib
+    import re
+
+    def inline(text: str) -> str:
+        text = html_lib.escape(text)
+        text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+        text = re.sub(r'\*(.+?)\*', r'<em>\1</em>', text)
+        text = re.sub(r'_(.+?)_', r'<em>\1</em>', text)
+        text = re.sub(r'`(.+?)`', r'<code>\1</code>', text)
+        return text
+
+    lines = md_text.split("\n")
+    parts: list[str] = []
+    in_ul = False
+    ul_is_checklist = False
+    para_lines: list[str] = []
+    in_code_block = False
+    code_lang = ""
+    code_lines: list[str] = []
+
+    def flush_para() -> None:
+        if para_lines:
+            parts.append(f"<p>{'<br>'.join(para_lines)}</p>")
+            para_lines.clear()
+
+    def close_ul() -> None:
+        nonlocal in_ul, ul_is_checklist
+        if in_ul:
+            parts.append("</ul>")
+            in_ul = False
+            ul_is_checklist = False
+
+    def flush_code_block() -> None:
+        content = "\n".join(code_lines)
+        if code_lang == "mermaid":
+            # Không escape — Mermaid.js cần raw text
+            parts.append(f'<div class="mermaid">{content}</div>')
+        else:
+            escaped = html_lib.escape(content)
+            lang_class = f' class="language-{code_lang}"' if code_lang else ""
+            parts.append(f"<pre><code{lang_class}>{escaped}</code></pre>")
+
+    for line in lines:
+        stripped = line.strip()
+
+        # --- Xử lý fenced code block ---
+        if in_code_block:
+            if stripped == "```":
+                flush_code_block()
+                in_code_block = False
+                code_lang = ""
+                code_lines = []
+            else:
+                code_lines.append(line)
+            continue
+
+        if stripped.startswith("```"):
+            close_ul(); flush_para()
+            code_lang = stripped[3:].strip().lower()
+            in_code_block = True
+            code_lines = []
+            continue
+
+        # --- Xử lý markdown thông thường ---
+        if stripped.startswith("# "):
+            close_ul(); flush_para()
+            parts.append(f"<h1>{inline(stripped[2:])}</h1>")
+        elif stripped.startswith("## "):
+            close_ul(); flush_para()
+            parts.append(f"<h2>{inline(stripped[3:])}</h2>")
+        elif stripped.startswith("### "):
+            close_ul(); flush_para()
+            parts.append(f"<h3>{inline(stripped[4:])}</h3>")
+        elif stripped.startswith("#### "):
+            close_ul(); flush_para()
+            parts.append(f"<h4>{inline(stripped[5:])}</h4>")
+        elif stripped == "---":
+            close_ul(); flush_para()
+            parts.append("<hr>")
+        elif re.match(r'^-\s*\[[ xX]\]', stripped):
+            flush_para()
+            checked = "checked" if stripped[3] in ("x", "X") else ""
+            text = inline(re.sub(r'^-\s*\[[ xX]\]\s*', "", stripped))
+            if not in_ul:
+                parts.append('<ul class="checklist">')
+                in_ul = True
+                ul_is_checklist = True
+            parts.append(f'<li><input type="checkbox" {checked} disabled> {text}</li>')
+        elif stripped.startswith("- ") or stripped.startswith("* "):
+            flush_para()
+            text = inline(stripped[2:])
+            if not in_ul or ul_is_checklist:
+                close_ul()
+                parts.append("<ul>")
+                in_ul = True
+            parts.append(f"<li>{text}</li>")
+        elif stripped == "":
+            close_ul(); flush_para()
+        else:
+            close_ul()
+            para_lines.append(inline(stripped))
+
+    # Đóng block còn mở cuối file
+    if in_code_block:
+        flush_code_block()
+    close_ul()
+    flush_para()
+
+    body = "\n".join(parts)
+
+    if qa_history:
+        qa_parts = ['<div class="qa-section"><h2>Hỏi &amp; Đáp</h2>']
+        for q, a in qa_history:
+            qa_parts.append(f'<div class="qa-q">{html_lib.escape(q)}</div>')
+            qa_parts.append(f'<div class="qa-a">{html_lib.escape(a)}</div>')
+        qa_parts.append("</div>")
+        body += "\n" + "\n".join(qa_parts)
+
+    return _HTML_TEMPLATE.format(body=body)
+
 
 class SummaryWorker(QThread):
     """Worker chạy trên thread riêng để tổng hợp tài liệu không block UI.
 
     Pipeline:
     1. Chuẩn bị nội dung từ extract cache (text, bảng, shapes, hình ảnh).
-    2. Chunking nếu nội dung vượt context window.
-    3. Gọi AI tạo tóm tắt ngắn (streaming lên UI).
-    4. Gọi AI tạo báo cáo chi tiết theo template.
-    5. Parse thông tin từng file (ý nghĩa, ngôn ngữ) → cập nhật bảng.
-    6. Lưu báo cáo .md vào Downloads.
+    2. Chunking nếu nội dung vượt context window (pre-summarize từng chunk).
+    3. Gọi AI tạo báo cáo chi tiết, streaming toàn bộ lên UI.
+    4. Lưu báo cáo .md vào thư mục tạm.
 
     Signals:
         status_updated: Phát khi cập nhật trạng thái (str thông báo).
         streaming_text: Phát text streaming cho UI typing effect (str chunk).
-        file_info_ready: Phát thông tin từng file (str tên_file, str ý_nghĩa, str ngôn_ngữ).
         detail_file_ready: Phát đường dẫn file .md (str path).
         cost_updated: Phát token usage (int input_tokens, int output_tokens).
         completed: Phát khi hoàn tất (bool thành_công, str lỗi).
     """
 
     status_updated = Signal(str)
-    streaming_text = Signal(str)
-    file_info_ready = Signal(str, str, str)
+    report_ready = Signal(str)
     detail_file_ready = Signal(str)
     cost_updated = Signal(int, int)
     completed = Signal(bool, str)
@@ -84,26 +269,15 @@ class SummaryWorker(QThread):
                 self.completed.emit(False, "Đã hủy")
                 return
 
-            # Bước 3: Tạo tóm tắt ngắn (streaming lên UI)
+            # Bước 3: Tạo báo cáo chi tiết, streaming toàn bộ lên UI
             self.status_updated.emit("Summarizing...")
-            self._generate_short_summary(all_content)
-
-            if self._cancelled:
-                self.completed.emit(False, "Đã hủy")
-                return
-
-            # Bước 4: Tạo báo cáo chi tiết
-            self.status_updated.emit("Generating report...")
             detailed_report = self._generate_detailed_report(all_content)
 
             if self._cancelled:
                 self.completed.emit(False, "Đã hủy")
                 return
 
-            # Bước 5: Parse thông tin từng file từ báo cáo
-            self._parse_file_info(detailed_report)
-
-            # Bước 6: Lưu file .md
+            # Bước 4: Lưu file .md
             md_path = self._save_report(detailed_report)
             self.detail_file_ready.emit(str(md_path))
 
@@ -207,7 +381,7 @@ class SummaryWorker(QThread):
 
         Khi nội dung vượt context window:
         1. Chia thành chunks (ưu tiên ranh giới file, có overlap).
-        2. Tổng hợp từng chunk.
+        2. Tổng hợp từng chunk (có retry).
         3. Nếu tổng hợp vẫn quá lớn → đệ quy.
 
         Args:
@@ -252,16 +426,13 @@ class SummaryWorker(QThread):
         Returns:
             Danh sách chunks.
         """
-        # Thử chia theo ranh giới file (=== File: ... ===)
         file_parts = content.split("\n=== File: ")
         if len(file_parts) > 1:
-            # Khôi phục prefix cho các phần sau phần đầu
             file_parts = [file_parts[0]] + [
                 f"=== File: {p}" for p in file_parts[1:]
             ]
             return self._group_parts_into_chunks(file_parts)
 
-        # Không có ranh giới file → chia theo token
         return self._split_by_tokens(content)
 
     def _group_parts_into_chunks(self, parts: list[str]) -> list[str]:
@@ -281,7 +452,6 @@ class SummaryWorker(QThread):
             if estimate_tokens(combined) > self._chunk_size:
                 if current:
                     chunks.append(current)
-                # Nếu một file đơn lẻ quá lớn → chia tiếp
                 if estimate_tokens(part) > self._chunk_size:
                     chunks.extend(self._split_by_tokens(part))
                 else:
@@ -317,7 +487,6 @@ class SummaryWorker(QThread):
         while start < len(text):
             end = min(start + chunk_chars, len(text))
 
-            # Cố gắng cắt tại ranh giới đoạn
             if end < len(text):
                 para_break = text.rfind("\n\n", start + chunk_chars // 2, end)
                 if para_break > start:
@@ -333,7 +502,9 @@ class SummaryWorker(QThread):
     # --- Gọi AI ---
 
     def _call_summarize(self, content: str, system_prompt: str) -> str:
-        """Gọi AI summarize, thu thập toàn bộ response (không stream lên UI).
+        """Gọi AI summarize với retry khi gặp lỗi tạm thời.
+
+        Dùng cho chunking pre-summarize (không stream lên UI).
 
         Args:
             content: Nội dung cần tổng hợp.
@@ -342,72 +513,40 @@ class SummaryWorker(QThread):
         Returns:
             Nội dung đã tổng hợp.
         """
-        text_parts: list[str] = []
-        for chunk in self._provider.summarize(content, system_prompt):
-            if self._cancelled:
-                break
-            if chunk.text:
-                text_parts.append(chunk.text)
-            if chunk.is_final:
-                self.cost_updated.emit(chunk.input_tokens, chunk.output_tokens)
-        return "".join(text_parts)
+        for attempt in range(_MAX_RETRIES):
+            try:
+                text_parts: list[str] = []
+                for chunk in self._provider.summarize(content, system_prompt):
+                    if self._cancelled:
+                        break
+                    if chunk.text:
+                        text_parts.append(chunk.text)
+                    if chunk.is_final:
+                        self.cost_updated.emit(chunk.input_tokens, chunk.output_tokens)
+                return "".join(text_parts)
+            except Exception as e:
+                is_last = attempt == _MAX_RETRIES - 1
+                if not _is_retryable(e) or is_last:
+                    raise
+                delay = _RETRY_BASE_DELAY * (2 ** attempt)
+                logger.warning(
+                    "Summary API lỗi tạm thời (lần %d/%d), thử lại sau %.0fs: %s",
+                    attempt + 1, _MAX_RETRIES, delay, e,
+                )
+                time.sleep(delay)
+        return ""  # không đến được đây
 
-    def _generate_short_summary(self, content: str) -> str:
-        """Tạo tóm tắt ngắn, streaming text lên UI.
+    def _generate_detailed_report(self, content: str) -> str:
+        """Tạo báo cáo chi tiết, streaming toàn bộ lên UI.
+
+        Thay thế cả short summary lẫn detailed report cũ —
+        một lần gọi AI, báo cáo hình thành trực tiếp trên màn hình.
 
         Args:
             content: Nội dung đã chuẩn bị (có thể đã qua chunking).
 
         Returns:
-            Bản tóm tắt ngắn.
-        """
-        file_count = len(self._contents)
-        if file_count == 1:
-            system_prompt = (
-                "Bạn là trợ lý AI chuyên phân tích và tổng hợp thông tin từ tài liệu.\n"
-                "Bạn nhận được nội dung của MỘT file duy nhất.\n\n"
-                "Hãy viết tóm tắt ngắn gọn (3-5 câu) gồm:\n"
-                "- File này nói về cái gì, phục vụ mục đích gì.\n"
-                "- Thông điệp chính hoặc nội dung cốt lõi mà file muốn truyền tải.\n"
-                "- Nếu nội dung còn mơ hồ hoặc thiếu rõ ràng, "
-                "chỉ ra ngắn gọn điểm nào cần làm rõ.\n\n"
-                "Trả lời bằng tiếng Việt."
-            )
-        else:
-            system_prompt = (
-                "Bạn là trợ lý AI chuyên phân tích và tổng hợp thông tin từ tài liệu.\n"
-                f"Bạn nhận được nội dung của {file_count} file.\n\n"
-                "Hãy viết tóm tắt ngắn gọn (3-7 câu):\n"
-                "- Đầu tiên, xác định xem các file có LIÊN QUAN đến nhau không.\n"
-                "- Nếu CÓ liên quan: tóm tắt thông điệp/mục đích chung mà toàn bộ "
-                "các file muốn truyền tải khi kết hợp lại, "
-                "và nêu ngắn gọn vai trò của từng file trong bức tranh tổng thể.\n"
-                "- Nếu KHÔNG liên quan: nói rõ các file không liên quan đến nhau, "
-                "sau đó tóm tắt ý nghĩa từng file (1 câu mỗi file).\n"
-                "- Nếu nội dung còn mơ hồ hoặc thiếu rõ ràng, "
-                "chỉ ra ngắn gọn điểm nào cần làm rõ.\n\n"
-                "Trả lời bằng tiếng Việt."
-            )
-
-        text_parts: list[str] = []
-        for chunk in self._provider.summarize(content, system_prompt):
-            if self._cancelled:
-                break
-            if chunk.text:
-                self.streaming_text.emit(chunk.text)
-                text_parts.append(chunk.text)
-            if chunk.is_final:
-                self.cost_updated.emit(chunk.input_tokens, chunk.output_tokens)
-        return "".join(text_parts)
-
-    def _generate_detailed_report(self, content: str) -> str:
-        """Tạo báo cáo chi tiết theo template.
-
-        Args:
-            content: Nội dung đã chuẩn bị.
-
-        Returns:
-            Báo cáo Markdown chi tiết.
+            Báo cáo Markdown đầy đủ.
         """
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
         file_count = len(self._contents)
@@ -426,13 +565,12 @@ class SummaryWorker(QThread):
             f"- **AI Provider**: {provider_info}\n\n"
             "---\n\n"
             "## 1. Tổng quan chung\n\n"
-            "[Mô tả tổng quan ý nghĩa, mục đích chung. "
+            "[Mô tả tổng quan ý nghĩa, mục đích chung (3-5 câu). "
             "Nêu mối liên hệ giữa các file hoặc ghi rõ nếu không liên quan.]\n\n"
             "---\n\n"
             "## 2. Phân tích từng file\n\n"
             "### 2.N. [Tên file gốc]\n"
             "- **Kích thước**: ...\n"
-            "- **Ngôn ngữ**: ... (bỏ qua dòng này nếu file chỉ có tiếng Việt)\n"
             "- **Loại tài liệu**: ...\n"
             "- **Ý nghĩa**: [File này phục vụ mục đích gì, nói về cái gì]\n"
             "- **Nội dung chính**:\n"
@@ -459,52 +597,42 @@ class SummaryWorker(QThread):
             "- [ ] ...\n\n"
             "Quy tắc:\n"
             "- Viết hoàn toàn bằng tiếng Việt\n"
-            "- Xác định ngôn ngữ chính của từng file (chỉ ghi nếu không phải tiếng Việt)\n"
-            "- Xác định ý nghĩa/mục đích cụ thể từng file\n"
             "- Sử dụng checkbox markdown cho phần đề xuất\n"
             "- QUAN TRỌNG: Đừng chỉ tóm tắt — hãy PHÂN TÍCH, BỔ SUNG, và ĐỀ XUẤT. "
             "Mục tiêu là người đọc hiểu mọi thứ từ báo cáo này mà không cần "
-            "tra Google hay hỏi thêm ai."
+            "tra Google hay hỏi thêm ai.\n\n"
+            "TRỰC QUAN HÓA VỚI MERMAID:\n"
+            "Báo cáo sẽ được render thành HTML — bạn có thể dùng Mermaid diagram "
+            "bằng cách dùng code block ```mermaid. Các trường hợp điển hình:\n"
+            "- Timeline, lịch trình, deadline → gantt\n"
+            "- Quy trình, luồng xử lý, kiến trúc hệ thống → flowchart\n"
+            "- Phân bổ tỉ lệ, thống kê → pie\n"
+            "- So sánh số liệu nhiều chiều → xychart-beta\n"
+            "- Quan hệ giữa các thực thể → erDiagram\n"
+            "Ngoài các trường hợp trên, hãy TỰ ĐÁNH GIÁ toàn bộ nội dung: "
+            "bất kỳ phần nào mà một sơ đồ hoặc biểu đồ giúp người đọc hiểu "
+            "nhanh hơn văn bản mô tả — hãy ưu tiên thêm Mermaid thay vì text. "
+            "Không ép buộc diagram nếu nội dung không phù hợp."
         )
 
-        return self._call_summarize(content, system_prompt)
+        text_parts: list[str] = []
+        for chunk in self._provider.summarize(content, system_prompt):
+            if self._cancelled:
+                break
+            if chunk.text:
+                text_parts.append(chunk.text)
+            if chunk.is_final:
+                self.cost_updated.emit(chunk.input_tokens, chunk.output_tokens)
 
-    # --- Parse và lưu kết quả ---
+        full_report = "".join(text_parts)
+        if full_report:
+            self.report_ready.emit(full_report)
+        return full_report
 
-    def _parse_file_info(self, report: str) -> None:
-        """Parse thông tin từng file từ báo cáo chi tiết.
-
-        Tìm các section ### 2.N. [tên file] và trích xuất:
-        - Ý nghĩa (từ dòng **Ý nghĩa**)
-        - Ngôn ngữ (từ dòng **Ngôn ngữ**, nếu có)
-
-        Args:
-            report: Báo cáo Markdown chi tiết.
-        """
-        # Tách các section file: ### 2.N. tên_file
-        sections = re.split(r"### 2\.\d+\.\s+", report)
-
-        for section in sections[1:]:  # Bỏ phần trước file đầu tiên
-            lines = section.strip().split("\n")
-            if not lines:
-                continue
-
-            file_name = lines[0].strip()
-            purpose = ""
-            language = ""
-
-            for line in lines[1:]:
-                stripped = line.strip()
-                if stripped.startswith("- **Ý nghĩa**:"):
-                    purpose = stripped.replace("- **Ý nghĩa**:", "").strip()
-                elif stripped.startswith("- **Ngôn ngữ**:"):
-                    language = stripped.replace("- **Ngôn ngữ**:", "").strip()
-
-            if file_name:
-                self.file_info_ready.emit(file_name, purpose, language)
+    # --- Lưu kết quả ---
 
     def _save_report(self, report: str) -> Path:
-        """Lưu báo cáo chi tiết vào file tạm (chưa download).
+        """Lưu báo cáo chi tiết dạng HTML vào file tạm (chưa download).
 
         File sẽ được copy sang Downloads khi người dùng bấm "Chi tiết".
 
@@ -512,17 +640,18 @@ class SummaryWorker(QThread):
             report: Nội dung báo cáo Markdown.
 
         Returns:
-            Đường dẫn file tạm đã lưu.
+            Đường dẫn file HTML tạm đã lưu.
         """
         import tempfile
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"lazydoc_summary_{timestamp}.md"
+        filename = f"lazydoc_summary_{timestamp}.html"
         tmp_dir = Path(tempfile.gettempdir()) / "lazydoc"
         tmp_dir.mkdir(parents=True, exist_ok=True)
         tmp_path = tmp_dir / filename
 
-        tmp_path.write_text(report, encoding="utf-8")
+        html_content = _md_to_html(report)
+        tmp_path.write_text(html_content, encoding="utf-8")
         logger.info("Đã lưu báo cáo tạm: %s", tmp_path)
         return tmp_path
 

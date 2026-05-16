@@ -68,15 +68,9 @@ class ExcelProcessor(FileProcessor):
                         row_data.append("")
                 rows_data.append(row_data)
 
-            # Tạo text readable
-            text_lines = []
-            for row in rows_data:
-                line = "\t".join(row)
-                if line.strip():
-                    text_lines.append(line)
-
-            if text_lines:
-                text_content[sheet_name] = "\n".join(text_lines)
+            # Lưu vào tables — text_content bỏ qua để tránh gửi cùng dữ liệu 2 lần lên AI
+            non_empty_rows = [r for r in rows_data if any(c.strip() for c in r)]
+            if non_empty_rows:
                 tables[sheet_name] = [rows_data]
 
         wb.close()

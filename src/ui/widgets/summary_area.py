@@ -1,15 +1,31 @@
-"""SummaryArea — Vùng hiển thị tóm tắt kết quả (có hiệu ứng typing)."""
+"""SummaryArea — Vùng hiển thị tóm tắt kết quả và Q&A."""
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QTextEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 from src.core.i18n import I18nManager
 
 
 class SummaryArea(QWidget):
-    """Vùng hiển thị tóm tắt kết quả tổng hợp."""
+    """Vùng hiển thị tóm tắt kết quả tổng hợp và Q&A.
+
+    Layout:
+        - overview_area: hiển thị tổng quan (luôn hiển thị sau summary).
+        - qa_area: hiển thị lịch sử Q&A (ẩn đến khi user bắt đầu hỏi).
+        - disclaimer: hiển thị khi đang chờ Q&A response.
+        - input row: ô nhập câu hỏi (ẩn đến khi summary hoàn tất).
+    """
 
     detail_clicked = Signal()
+    qa_submitted = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         """Khởi tạo SummaryArea."""
@@ -44,12 +60,47 @@ class SummaryArea(QWidget):
 
         layout.addLayout(header)
 
-        # Vùng hiển thị nội dung tóm tắt
-        self._text_area = QTextEdit()
-        self._text_area.setObjectName("summaryText")
-        self._text_area.setReadOnly(True)
-        self._text_area.setPlaceholderText("Kết quả tổng hợp sẽ hiển thị tại đây...")
-        layout.addWidget(self._text_area)
+        # Vùng tổng quan (luôn hiển thị sau summary)
+        self._overview_area = QTextEdit()
+        self._overview_area.setObjectName("overviewText")
+        self._overview_area.setReadOnly(True)
+        self._overview_area.setPlaceholderText("Kết quả tổng hợp sẽ hiển thị tại đây...")
+        layout.addWidget(self._overview_area, stretch=2)
+
+        # Vùng Q&A (ẩn đến khi user bắt đầu hỏi)
+        self._qa_area = QTextEdit()
+        self._qa_area.setObjectName("qaText")
+        self._qa_area.setReadOnly(True)
+        self._qa_area.hide()
+        layout.addWidget(self._qa_area, stretch=3)
+
+        # Disclaimer hiển thị khi chờ Q&A response
+        self._disclaimer_label = QLabel(
+            "💡 Câu trả lời dựa trên báo cáo tổng hợp, không phải tài liệu gốc."
+        )
+        self._disclaimer_label.setObjectName("disclaimerLabel")
+        self._disclaimer_label.hide()
+        layout.addWidget(self._disclaimer_label)
+
+        # Q&A input (ẩn đến khi summary hoàn tất)
+        qa_row = QHBoxLayout()
+        qa_row.setSpacing(6)
+        self._qa_input = QLineEdit()
+        self._qa_input.setObjectName("qaInput")
+        self._qa_input.setPlaceholderText("Hỏi thêm hoặc focus vào chủ đề...")
+        self._qa_input.returnPressed.connect(self._on_send_clicked)
+        qa_row.addWidget(self._qa_input)
+
+        self._qa_send_btn = QPushButton("Gửi")
+        self._qa_send_btn.setObjectName("qaSendBtn")
+        self._qa_send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._qa_send_btn.clicked.connect(self._on_send_clicked)
+        qa_row.addWidget(self._qa_send_btn)
+
+        self._qa_widget = QWidget()
+        self._qa_widget.setLayout(qa_row)
+        self._qa_widget.hide()
+        layout.addWidget(self._qa_widget)
 
     def _setup_style(self) -> None:
         """Áp dụng stylesheet."""
@@ -64,10 +115,19 @@ class SummaryArea(QWidget):
                 background: transparent;
                 border: none;
             }
-            #summaryText {
+            #overviewText {
                 background-color: #181825;
                 color: #cdd6f4;
                 border: 1px solid #45475a;
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 13px;
+                font-family: monospace;
+            }
+            #qaText {
+                background-color: #11111b;
+                color: #cdd6f4;
+                border: 1px solid #313244;
                 border-radius: 8px;
                 padding: 10px;
                 font-size: 13px;
@@ -85,10 +145,54 @@ class SummaryArea(QWidget):
             #detailBtn:hover {
                 background-color: #74c7ec;
             }
+            #disclaimerLabel {
+                color: #6c7086;
+                font-size: 11px;
+                font-style: italic;
+                padding: 2px 0px;
+            }
+            #qaInput {
+                background-color: #181825;
+                color: #cdd6f4;
+                border: 1px solid #45475a;
+                border-radius: 6px;
+                padding: 6px 10px;
+                font-size: 13px;
+            }
+            #qaInput:focus {
+                border-color: #89b4fa;
+            }
+            #qaSendBtn {
+                background-color: #89b4fa;
+                color: #1e1e2e;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 16px;
+                font-size: 13px;
+                font-weight: bold;
+                min-width: 60px;
+            }
+            #qaSendBtn:hover {
+                background-color: #74c7ec;
+            }
+            #qaSendBtn:disabled {
+                background-color: #313244;
+                color: #6c7086;
+            }
         """)
 
+    def _on_send_clicked(self) -> None:
+        """Xử lý khi người dùng bấm Gửi hoặc Enter."""
+        question = self._qa_input.text().strip()
+        if not question:
+            return
+        self._qa_input.clear()
+        self.qa_submitted.emit(question)
+
+    # --- Public API ---
+
     def set_summary(self, text: str, typing_effect: bool = True) -> None:
-        """Hiển thị nội dung tóm tắt.
+        """Hiển thị nội dung tóm tắt vào vùng tổng quan.
 
         Args:
             text: Nội dung tóm tắt.
@@ -98,17 +202,13 @@ class SummaryArea(QWidget):
         if typing_effect:
             self._start_typing(text)
         else:
-            self._text_area.setPlainText(text)
+            self._overview_area.setPlainText(text)
 
     def _start_typing(self, text: str) -> None:
-        """Bắt đầu hiệu ứng typing.
-
-        Args:
-            text: Nội dung cần hiển thị từng ký tự.
-        """
+        """Bắt đầu hiệu ứng typing vào overview_area."""
         self._typing_text = text
         self._typing_index = 0
-        self._text_area.clear()
+        self._overview_area.clear()
         self._typing_timer = QTimer(self)
         self._typing_timer.setInterval(20)
         self._typing_timer.timeout.connect(self._type_next_char)
@@ -117,7 +217,7 @@ class SummaryArea(QWidget):
     def _type_next_char(self) -> None:
         """Hiển thị ký tự tiếp theo trong hiệu ứng typing."""
         if self._typing_index < len(self._typing_text):
-            self._text_area.insertPlainText(self._typing_text[self._typing_index])
+            self._overview_area.insertPlainText(self._typing_text[self._typing_index])
             self._typing_index += 1
         else:
             self._stop_typing()
@@ -129,19 +229,64 @@ class SummaryArea(QWidget):
             self._typing_timer = None
 
     def append_text(self, text: str) -> None:
-        """Thêm text vào cuối vùng tóm tắt (dùng cho streaming).
+        """Thêm text vào cuối vùng Q&A (dùng cho streaming câu trả lời).
 
         Args:
             text: Đoạn text cần thêm.
         """
-        self._text_area.insertPlainText(text)
+        self._qa_area.insertPlainText(text)
+        scrollbar = self._qa_area.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+
+    def append_qa_question(self, question: str) -> None:
+        """Thêm câu hỏi vào vùng Q&A, hiện vùng này nếu đang ẩn.
+
+        Args:
+            question: Câu hỏi của người dùng.
+        """
+        if not self._qa_area.isVisible():
+            self._qa_area.show()
+
+        current = self._qa_area.toPlainText()
+        separator = "\n\n" + "─" * 40 + "\n" if current else ""
+        self._qa_area.insertPlainText(f"{separator}❓ {question}\n\n")
+        scrollbar = self._qa_area.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
 
     def show_detail_button(self) -> None:
         """Hiển thị nút Chi tiết (chỉ gọi sau khi summary hoàn tất)."""
         self._detail_btn.show()
 
+    def show_qa_input(self) -> None:
+        """Hiển thị ô Q&A input (chỉ gọi sau khi summary hoàn tất)."""
+        self._qa_widget.show()
+        self._qa_send_btn.setEnabled(True)
+        self._qa_input.setEnabled(True)
+
+    def show_disclaimer(self) -> None:
+        """Hiển thị disclaimer khi chờ Q&A response."""
+        self._disclaimer_label.show()
+        self.set_qa_processing(True)
+
+    def hide_disclaimer(self) -> None:
+        """Ẩn disclaimer khi Q&A response bắt đầu stream."""
+        self._disclaimer_label.hide()
+
+    def set_qa_processing(self, processing: bool) -> None:
+        """Bật/tắt trạng thái đang xử lý Q&A.
+
+        Args:
+            processing: True để disable input, False để re-enable.
+        """
+        self._qa_send_btn.setEnabled(not processing)
+        self._qa_input.setEnabled(not processing)
+
     def clear(self) -> None:
-        """Xóa nội dung tóm tắt."""
+        """Xóa toàn bộ nội dung (cả overview và Q&A)."""
         self._stop_typing()
-        self._text_area.clear()
+        self._overview_area.clear()
+        self._qa_area.clear()
+        self._qa_area.hide()
         self._detail_btn.hide()
+        self._qa_widget.hide()
+        self._disclaimer_label.hide()

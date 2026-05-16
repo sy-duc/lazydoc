@@ -51,17 +51,14 @@ class WordProcessor(FileProcessor):
             if para.text.strip():
                 text_parts.append(para.text)
 
-        # Extract tables
+        # Extract tables — chỉ lưu vào tables_data, không thêm vào text_parts
+        # để tránh gửi cùng dữ liệu 2 lần lên AI (text_content + tables)
         for idx, table in enumerate(doc.tables):
             table_rows: list[list[str]] = []
             for row in table.rows:
                 row_data = [cell.text for cell in row.cells]
                 table_rows.append(row_data)
             tables_data.append(table_rows)
-
-            text_parts.append(f"\n[Bảng {idx + 1}]")
-            for row in table_rows:
-                text_parts.append("\t".join(row))
 
         # Extract images
         for rel_id, rel in doc.part.rels.items():
@@ -82,8 +79,8 @@ class WordProcessor(FileProcessor):
             file_path=file_path,
             file_name=file_path.name,
             file_size=file_path.stat().st_size,
-            text_content={"main": text_content} if text_content.strip() else {},
-            tables={"main": tables_data} if tables_data else {},
+            text_content={"prose": text_content} if text_content.strip() else {},
+            tables={"tables": tables_data} if tables_data else {},
             shapes_text={"main": shapes_text_list} if shapes_text_list else {},
             images=images,
             metadata={

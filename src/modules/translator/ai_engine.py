@@ -2,9 +2,10 @@
 
 import logging
 import re
+import time
 from typing import Callable
 
-from src.providers.base import BaseProvider
+from src.providers.base import BaseProvider, StreamChunk
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,23 @@ _BATCH_CHAR_LIMIT = 3500
 # Delimiter phân tách items trong batch — dùng ký tự Unicode hiếm
 _ITEM_PREFIX = "⟦"
 _ITEM_SUFFIX = "⟧"
+
+# Retry config
+_MAX_RETRIES = 3
+_RETRY_BASE_DELAY = 2.0  # seconds, doubled mỗi lần
+
+# Từ khóa trong error message → có thể retry
+_RETRYABLE_KEYWORDS = (
+    "timeout", "timed out", "connection", "reset by peer",
+    "rate limit", "too many requests", "overloaded", "unavailable",
+    "503", "502", "504", "429",
+)
+
+
+def _is_retryable(e: Exception) -> bool:
+    """Kiểm tra lỗi có thể retry không (timeout, connection, rate limit)."""
+    s = str(e).lower()
+    return any(kw in s for kw in _RETRYABLE_KEYWORDS)
 
 
 class AIEngine:
@@ -213,29 +231,58 @@ class AIEngine:
 
         return self._translate_numbered(texts)
 
+    def _collect_chunks_with_retry(
+        self, generator_factory: Callable[[], "Generator[StreamChunk, None, None]"]
+    ) -> tuple[list[str], int, int]:
+        """Gọi API và thu thập chunks, tự động retry khi gặp lỗi tạm thời.
+
+        Args:
+            generator_factory: Hàm trả về generator mới mỗi lần gọi.
+
+        Returns:
+            Tuple (chunks, input_tokens, output_tokens).
+
+        Raises:
+            Exception: Lỗi không thể retry hoặc đã hết số lần thử.
+        """
+        for attempt in range(_MAX_RETRIES):
+            try:
+                chunks: list[str] = []
+                input_tokens = 0
+                output_tokens = 0
+                for chunk in generator_factory():
+                    if chunk.text:
+                        chunks.append(chunk.text)
+                    if chunk.is_final:
+                        input_tokens = chunk.input_tokens
+                        output_tokens = chunk.output_tokens
+                return chunks, input_tokens, output_tokens
+            except Exception as e:
+                is_last = attempt == _MAX_RETRIES - 1
+                if not _is_retryable(e) or is_last:
+                    raise
+                delay = _RETRY_BASE_DELAY * (2 ** attempt)
+                logger.warning(
+                    "API lỗi tạm thời (lần %d/%d), thử lại sau %.0fs: %s",
+                    attempt + 1, _MAX_RETRIES, delay, e,
+                )
+                time.sleep(delay)
+        raise RuntimeError("Không thể hoàn thành sau khi retry.")  # không đến được đây
+
     def _translate_single(self, text: str) -> str:
-        """Dịch một text đơn lẻ qua AI."""
-        chunks: list[str] = []
-        input_tokens = 0
-        output_tokens = 0
-
-        for chunk in self._provider.translate(
-            content=text,
-            target_lang=self._target_lang,
-            source_lang=self._source_lang,
-            domain=self._domain,
-            style=self._style,
-            context=self._context,
-            glossary=self._glossary,
-        ):
-            if chunk.text:
-                chunks.append(chunk.text)
-            if chunk.is_final:
-                input_tokens = chunk.input_tokens
-                output_tokens = chunk.output_tokens
-
+        """Dịch một text đơn lẻ qua AI, có retry."""
+        chunks, input_tokens, output_tokens = self._collect_chunks_with_retry(
+            lambda: self._provider.translate(
+                content=text,
+                target_lang=self._target_lang,
+                source_lang=self._source_lang,
+                domain=self._domain,
+                style=self._style,
+                context=self._context,
+                glossary=self._glossary,
+            )
+        )
         self._accumulate_usage(input_tokens, output_tokens)
-
         result = "".join(chunks)
         return result.strip() if result.strip() else text
 
@@ -270,25 +317,18 @@ class AIEngine:
             f"Mỗi mục dịch trên 1 dòng. CHỈ trả về bản dịch, KHÔNG thêm gì khác."
         )
 
-        chunks: list[str] = []
-        input_tokens = 0
-        output_tokens = 0
-
-        for chunk in self._provider.translate(
-            content=f"{batch_instruction}\n\n{content}",
-            target_lang=self._target_lang,
-            source_lang=self._source_lang,
-            domain=self._domain,
-            style=self._style,
-            context=self._context,
-            glossary=self._glossary,
-        ):
-            if chunk.text:
-                chunks.append(chunk.text)
-            if chunk.is_final:
-                input_tokens = chunk.input_tokens
-                output_tokens = chunk.output_tokens
-
+        batch_content = f"{batch_instruction}\n\n{content}"
+        chunks, input_tokens, output_tokens = self._collect_chunks_with_retry(
+            lambda: self._provider.translate(
+                content=batch_content,
+                target_lang=self._target_lang,
+                source_lang=self._source_lang,
+                domain=self._domain,
+                style=self._style,
+                context=self._context,
+                glossary=self._glossary,
+            )
+        )
         self._accumulate_usage(input_tokens, output_tokens)
 
         # Parse kết quả

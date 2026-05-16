@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 # Mapping extension → (module_path, class_name) — lazy import
 _WRITER_REGISTRY: dict[str, tuple[str, str]] = {
     ".txt": ("src.writers.txt_writer", "TxtWriter"),
+    ".md": ("src.writers.txt_writer", "TxtWriter"),
     ".csv": ("src.writers.csv_writer", "CsvWriter"),
     ".xlsx": ("src.writers.excel_writer", "ExcelWriter"),
     ".xls": ("src.writers.excel_writer", "ExcelWriter"),
@@ -17,7 +18,6 @@ _WRITER_REGISTRY: dict[str, tuple[str, str]] = {
     ".doc": ("src.writers.word_writer", "WordWriter"),
     ".pptx": ("src.writers.powerpoint_writer", "PowerPointWriter"),
     ".ppt": ("src.writers.powerpoint_writer", "PowerPointWriter"),
-    ".pdf": ("src.writers.pdf_writer", "PdfWriter"),
 }
 
 

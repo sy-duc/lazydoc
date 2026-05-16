@@ -23,11 +23,12 @@ class TestWriterFactory:
         """Kiểm tra danh sách extension được hỗ trợ."""
         exts = WriterFactory.get_supported_extensions()
         assert ".txt" in exts
+        assert ".md" in exts
         assert ".csv" in exts
         assert ".xlsx" in exts
         assert ".docx" in exts
         assert ".pptx" in exts
-        assert ".pdf" in exts
+        assert ".pdf" not in exts
 
     def test_is_supported(self) -> None:
         assert WriterFactory.is_supported(Path("test.txt"))

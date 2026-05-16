@@ -15,17 +15,26 @@ class ClaudeProvider(BaseProvider):
     """AI Provider sử dụng Anthropic Claude API.
 
     Sử dụng anthropic SDK với streaming response.
+    Tự động chọn model mới nhất từ API, fallback về claude-haiku nếu lỗi.
     """
+
+    _FALLBACK_MODEL = "claude-haiku-4-5-20251001"
+    _FALLBACK_MODELS = ["claude-sonnet-4-20250514", "claude-haiku-4-5-20251001"]
+
+    # Cache danh sách model (class-level, share giữa các instance)
+    _cached_models: list[str] | None = None
 
     def __init__(self, api_key: str, model: str | None = None) -> None:
         """Khởi tạo ClaudeProvider.
 
         Args:
             api_key: Anthropic API key.
-            model: Tên model Claude. Mặc định: claude-haiku-4-5-20251001.
+            model: Tên model Claude. Nếu None, tự chọn model mới nhất.
         """
-        super().__init__(api_key, model)
+        self._api_key = api_key
         self._client = anthropic.Anthropic(api_key=self._api_key)
+        self._model = model or self._resolve_default_model()
+        logger.info("Claude model đã chọn: %s", self._model)
 
     @property
     def name(self) -> str:
@@ -33,11 +42,60 @@ class ClaudeProvider(BaseProvider):
 
     @property
     def default_model(self) -> str:
-        return "claude-haiku-4-5-20251001"
+        return self._resolve_default_model()
 
     @property
     def supported_models(self) -> list[str]:
-        return ["claude-sonnet-4-20250514", "claude-haiku-4-5-20251001"]
+        return self._fetch_available_models()
+
+    def _resolve_default_model(self) -> str:
+        """Chọn model mặc định: ưu tiên haiku (nhanh/rẻ) > sonnet > opus.
+
+        Trong cùng tier, chọn version mới nhất (sắp xếp giảm dần theo tên).
+
+        Returns:
+            Tên model mặc định.
+        """
+        models = self._fetch_available_models()
+        stable = [m for m in models if "preview" not in m and "beta" not in m]
+        if not stable:
+            return self._FALLBACK_MODEL
+
+        # Ưu tiên theo tier, lấy version mới nhất trong mỗi tier
+        for tier in ("haiku", "sonnet", "opus"):
+            tier_models = sorted(
+                [m for m in stable if tier in m], reverse=True
+            )
+            if tier_models:
+                return tier_models[0]
+
+        return sorted(stable, reverse=True)[0]
+
+    def _fetch_available_models(self) -> list[str]:
+        """Lấy danh sách model Claude từ API, cache kết quả.
+
+        Returns:
+            Danh sách tên model Claude.
+        """
+        if ClaudeProvider._cached_models is not None:
+            return ClaudeProvider._cached_models
+
+        try:
+            models = []
+            for m in self._client.models.list():
+                model_id = m.id
+                if "claude" in model_id:
+                    models.append(model_id)
+
+            if models:
+                ClaudeProvider._cached_models = sorted(models)
+                logger.info("Claude models available: %s", models)
+                return ClaudeProvider._cached_models
+        except Exception as e:
+            logger.warning("Không thể lấy danh sách model Claude: %s. Dùng fallback.", e)
+
+        ClaudeProvider._cached_models = list(self._FALLBACK_MODELS)
+        return ClaudeProvider._cached_models
 
     def summarize(
         self,
@@ -106,7 +164,6 @@ class ClaudeProvider(BaseProvider):
                 for text in stream.text_stream:
                     yield StreamChunk(text=text)
 
-                # Lấy usage sau khi stream kết thúc
                 response = stream.get_final_message()
                 input_tokens = response.usage.input_tokens
                 output_tokens = response.usage.output_tokens
@@ -123,7 +180,6 @@ class ClaudeProvider(BaseProvider):
     def validate_key(self) -> bool:
         """Kiểm tra API key Claude bằng cách đếm token (miễn phí)."""
         try:
-            # Dùng count_tokens — không tạo message, không tốn tiền
             self._client.messages.count_tokens(
                 model=self._model,
                 messages=[{"role": "user", "content": "test"}],
@@ -162,7 +218,6 @@ class ClaudeProvider(BaseProvider):
                 for text in stream.text_stream:
                     yield StreamChunk(text=text)
 
-                # Lấy usage sau khi stream kết thúc
                 response = stream.get_final_message()
                 input_tokens = response.usage.input_tokens
                 output_tokens = response.usage.output_tokens

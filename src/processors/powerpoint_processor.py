@@ -82,16 +82,14 @@ class PowerPointProcessor(FileProcessor):
                         else:
                             slide_shapes.append(text)
 
-                # Bảng biểu
+                # Bảng biểu — chỉ lưu vào slide_tables, không thêm vào slide_texts
+                # để tránh gửi cùng dữ liệu 2 lần lên AI
                 if shape.has_table:
                     table_data: list[list[str]] = []
                     for row in shape.table.rows:
                         row_data = [cell.text for cell in row.cells]
                         table_data.append(row_data)
                     slide_tables.append(table_data)
-                    slide_texts.append("[Bảng]")
-                    for row in table_data:
-                        slide_texts.append("\t".join(row))
 
                 # Hình ảnh
                 if hasattr(shape, "image"):
@@ -114,7 +112,7 @@ class PowerPointProcessor(FileProcessor):
             if slide_shapes:
                 shapes_text[slide_key] = slide_shapes
             if slide_tables:
-                tables[slide_key] = slide_tables
+                tables[f"{slide_key}_tables"] = slide_tables
 
         total_shapes = sum(len(v) for v in shapes_text.values())
 

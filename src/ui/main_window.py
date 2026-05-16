@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 
 from src.core.i18n import I18nManager
 from src.modules.extract import ExtractModule
-from src.modules.summarizer import SummaryModule
+from src.modules.summarizer import SummaryModule, QAModule, _md_to_html
 from src.modules.translator import TranslateModule
 from src.processors.base import ExtractedContent
 from src.processors.factory import ProcessorFactory
@@ -54,7 +54,11 @@ class MainWindow(QWidget):
         self._extract_results: list[str] = []
         self._grind_files: list[Path] = []
         self._grind_cancelled = False
-        self._detail_md_path: str = ""
+        self._detail_report_path: str = ""
+        self._summary_context: str = ""
+        self._qa_history: list[tuple[str, str]] = []
+        self._qa_current_answer: str = ""
+        self._qa_pending_question: str = ""
         self._setup_window()
         self._setup_ui()
         self._setup_extract_module()
@@ -89,18 +93,22 @@ class MainWindow(QWidget):
         content_layout.setContentsMargins(16, 12, 16, 12)
         content_layout.setSpacing(10)
 
-        # Vùng hoạt ảnh máy xay + drag & drop (phía trên)
-        self._blender = BlenderArea()
-        content_layout.addWidget(self._blender, stretch=1)
+        # Hàng trên: máy xay (trái) + bảng danh sách file (phải)
+        top_row = QHBoxLayout()
+        top_row.setSpacing(10)
 
-        # Bảng danh sách file (ẩn ban đầu, hiển thị khi có file)
+        self._blender = BlenderArea()
+        top_row.addWidget(self._blender, stretch=1)
+
         self._file_table = FileTable()
         self._file_table.setVisible(False)
-        content_layout.addWidget(self._file_table, stretch=3)
+        top_row.addWidget(self._file_table, stretch=2)
 
-        # Vùng tóm tắt kết quả
+        content_layout.addLayout(top_row, stretch=2)
+
+        # Vùng tóm tắt kết quả (chiếm nhiều không gian hơn)
         self._summary_area = SummaryArea()
-        content_layout.addWidget(self._summary_area, stretch=3)
+        content_layout.addWidget(self._summary_area, stretch=5)
 
         # Vùng theo dõi chi phí
         self._cost_tracker = CostTracker()
@@ -150,11 +158,8 @@ class MainWindow(QWidget):
         """)
 
     def _setup_provider_connections(self) -> None:
-        """Kết nối ProviderManager/TokenCounter với UI."""
-        # TokenCounter → CostTracker: cập nhật chi phí realtime
-        self._provider_manager.token_counter.usage_updated.connect(
-            self._cost_tracker.update_cost
-        )
+        """Kết nối ProviderManager với UI."""
+        pass
 
     # --- Drag & Drop ---
 
@@ -233,25 +238,30 @@ class MainWindow(QWidget):
         self._file_table.file_removed.connect(self._on_file_removed)
 
     def _setup_summary_module(self) -> None:
-        """Khởi tạo SummaryModule và kết nối signal."""
+        """Khởi tạo SummaryModule, QAModule và kết nối signal."""
         self._summary_module = SummaryModule(self)
         self._summary_module.set_provider_manager(self._provider_manager)
 
-        # Streaming text → hiển thị trên UI với typing effect
-        self._summary_module.streaming_text.connect(self._on_summary_streaming)
+        # Báo cáo hoàn chỉnh → trích xuất tổng quan hiển thị UI
+        self._summary_module.report_ready.connect(self._on_report_ready)
         # Trạng thái → cập nhật blender animation
         self._summary_module.status_updated.connect(self._on_summary_status)
-        # Thông tin từng file → cập nhật bảng file
-        self._summary_module.file_info_ready.connect(self._on_summary_file_info)
         # File .md chi tiết → lưu đường dẫn cho nút "Chi tiết"
         self._summary_module.detail_file_ready.connect(self._on_summary_detail_ready)
-        # Chi phí → cập nhật token counter
-        self._summary_module.cost_updated.connect(self._on_summary_cost)
         # Hoàn tất → reset UI
         self._summary_module.summary_completed.connect(self._on_summary_completed)
 
         # Nút "Chi tiết" → mở file .md
         self._summary_area.detail_clicked.connect(self._on_detail_clicked)
+
+        # Q&A module
+        self._qa_module = QAModule(self)
+        self._qa_module.set_provider_manager(self._provider_manager)
+        self._qa_module.streaming_text.connect(self._on_qa_streaming)
+        self._qa_module.completed.connect(self._on_qa_completed)
+
+        # Q&A input → bắt đầu Q&A
+        self._summary_area.qa_submitted.connect(self._on_qa_submitted)
 
     def _setup_translate_module(self) -> None:
         """Khởi tạo TranslateModule."""
@@ -359,12 +369,17 @@ class MainWindow(QWidget):
         # Thu thập nội dung đã extract
         self._grind_files = list(checked_files)
         self._grind_cancelled = False
-        self._detail_md_path = ""
+        self._detail_report_path = ""
+        self._summary_context = ""
         contents: dict[Path, ExtractedContent] = {}
         for f in checked_files:
             cached = self._extract_module.get_cached(f)
             if cached:
                 contents[f] = cached
+
+        # Reset Q&A session
+        self._qa_history = []
+        self._qa_current_answer = ""
 
         # Chuẩn bị UI
         self._blender.set_status("Analysing...")
@@ -459,45 +474,52 @@ class MainWindow(QWidget):
         if self._summary_module.is_running:
             self._summary_module.cancel()
 
+        if self._qa_module.is_running:
+            self._qa_module.cancel()
+
         self._reset_processing_ui()
 
     # --- Summary signal handlers ---
 
-    def _on_summary_streaming(self, text: str) -> None:
-        """Nhận text streaming từ AI → hiển thị lên vùng tóm tắt."""
-        self._summary_area.append_text(text)
+    def _on_report_ready(self, full_report: str) -> None:
+        """Nhận báo cáo đầy đủ → lưu context, trích xuất tổng quan cho UI."""
+        self._summary_context = full_report
+        overview = self._extract_overview(full_report)
+        self._summary_area.set_summary(overview, typing_effect=False)
+
+    def _extract_overview(self, report: str) -> str:
+        """Trích xuất phần tổng quan chung từ báo cáo để hiển thị trên UI.
+
+        Args:
+            report: Báo cáo Markdown đầy đủ.
+
+        Returns:
+            Nội dung phần tổng quan, kèm gợi ý tải file chi tiết.
+        """
+        marker = "## 1. Tổng quan chung"
+        start_idx = report.find(marker)
+        if start_idx == -1:
+            # Fallback: 600 ký tự đầu
+            overview = report[:600].strip()
+        else:
+            content_start = report.find("\n", start_idx) + 1
+            end_idx = report.find("\n---", content_start)
+            if end_idx == -1:
+                overview = report[content_start:content_start + 800].strip()
+            else:
+                overview = report[content_start:end_idx].strip()
+
+        return overview + "\n\n─────────────────────────\n💡 Bấm 'Chi tiết ↓' để tải đầy đủ báo cáo phân tích."
 
     def _on_summary_status(self, status: str) -> None:
         """Cập nhật trạng thái blender animation khi summary đang chạy."""
         self._blender.set_status(status)
 
-    def _on_summary_file_info(
-        self, file_name: str, purpose: str, language: str
-    ) -> None:
-        """Cập nhật bảng file với ngôn ngữ từ AI phân tích."""
-        for f in self._grind_files:
-            if f.name == file_name:
-                if language:
-                    self._file_table.update_file_language(f, language)
-                break
-
-    def _on_summary_detail_ready(self, md_path: str) -> None:
-        """Lưu đường dẫn file .md chi tiết và hiển thị nút 'Chi tiết'."""
-        self._detail_md_path = md_path
+    def _on_summary_detail_ready(self, report_path: str) -> None:
+        """Lưu đường dẫn file HTML chi tiết và hiển thị nút 'Chi tiết'."""
+        self._detail_report_path = report_path
         self._summary_area.show_detail_button()
-        logger.info("Báo cáo chi tiết đã sẵn sàng: %s", md_path)
-
-    def _on_summary_cost(
-        self,
-        provider_name: str,
-        model: str,
-        input_tokens: int,
-        output_tokens: int,
-    ) -> None:
-        """Cập nhật chi phí AI qua TokenCounter → CostTracker."""
-        self._provider_manager.token_counter.add_usage(
-            provider_name, model, input_tokens, output_tokens,
-        )
+        logger.info("Báo cáo chi tiết đã sẵn sàng: %s", report_path)
 
     def _on_summary_completed(self, success: bool, error_msg: str) -> None:
         """Xử lý khi tổng hợp hoàn tất hoặc thất bại."""
@@ -510,36 +532,39 @@ class MainWindow(QWidget):
             logger.error("Tổng hợp thất bại: %s", error_msg)
         else:
             self._blender.play_done()
-            # Cập nhật trạng thái file → "Đã summary"
             if success:
                 for f in self._grind_files:
                     self._file_table.update_file_status(f, "Đã summary")
+                # Hiển thị Q&A input sau khi tổng hợp thành công
+                self._summary_area.show_qa_input()
 
     def _on_detail_clicked(self) -> None:
-        """Copy file .md từ thư mục tạm sang Downloads và thông báo."""
-        if not self._detail_md_path:
+        """Tạo file HTML báo cáo (kèm Q&A nếu có) và lưu vào Downloads."""
+        if not self._summary_context:
             return
 
-        import shutil
-
-        tmp_path = Path(self._detail_md_path)
-        if not tmp_path.exists():
-            logger.warning("File báo cáo tạm không tồn tại: %s", tmp_path)
-            return
-
-        # Copy sang Downloads
         downloads = self._summary_module.output_dir
         downloads.mkdir(parents=True, exist_ok=True)
-        dest_path = downloads / tmp_path.name
 
-        # Tránh ghi đè
+        # Lấy tên file gốc từ temp path nếu có, không thì tạo mới
+        from datetime import datetime
+        if self._detail_report_path:
+            stem = Path(self._detail_report_path).stem
+        else:
+            stem = f"lazydoc_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+        dest_path = downloads / f"{stem}.html"
         counter = 1
         while dest_path.exists():
-            stem = tmp_path.stem
-            dest_path = downloads / f"{stem} ({counter}).md"
+            dest_path = downloads / f"{stem} ({counter}).html"
             counter += 1
 
-        shutil.copy2(tmp_path, dest_path)
+        # Sinh HTML từ report gốc + Q&A hiện tại
+        html_content = _md_to_html(
+            self._summary_context,
+            qa_history=self._qa_history or None,
+        )
+        dest_path.write_text(html_content, encoding="utf-8")
         logger.info("Đã tải báo cáo về: %s", dest_path)
 
         QMessageBox.information(
@@ -548,6 +573,47 @@ class MainWindow(QWidget):
             f"File báo cáo đã được lưu tại:\n{dest_path}",
         )
 
+    # --- Q&A signal handlers ---
+
+    def _on_qa_submitted(self, question: str) -> None:
+        """Xử lý khi người dùng gửi câu hỏi Q&A."""
+        if not self._summary_context:
+            return
+        if self._qa_module.is_running:
+            return
+
+        self._qa_current_answer = ""
+        self._summary_area.append_qa_question(question)
+        self._summary_area.show_disclaimer()
+
+        self._qa_module.start_qa(
+            summary_context=self._summary_context,
+            qa_history=self._qa_history,
+            question=question,
+        )
+        # Lưu câu hỏi để ghép với câu trả lời sau khi hoàn tất
+        self._qa_pending_question = question
+
+    def _on_qa_streaming(self, text: str) -> None:
+        """Nhận text streaming từ Q&A → ẩn disclaimer, hiển thị câu trả lời."""
+        self._summary_area.hide_disclaimer()
+        self._summary_area.append_text(text)
+        self._qa_current_answer += text
+
+    def _on_qa_completed(self, success: bool, error_msg: str) -> None:
+        """Xử lý khi Q&A hoàn tất."""
+        self._summary_area.hide_disclaimer()
+        self._summary_area.set_qa_processing(False)
+
+        if success and self._qa_current_answer:
+            self._qa_history.append(
+                (self._qa_pending_question, self._qa_current_answer)
+            )
+            self._qa_current_answer = ""
+        elif not success and error_msg and error_msg != "Đã hủy":
+            self._summary_area.append_text(f"\n[Lỗi Q&A: {error_msg}]")
+            logger.error("Q&A thất bại: %s", error_msg)
+
     def _reset_processing_ui(self) -> None:
         """Reset trạng thái UI về chế độ bình thường (không đang xử lý)."""
         self._blender.set_status("")
@@ -555,10 +621,7 @@ class MainWindow(QWidget):
         self._cost_tracker.set_processing(False)
 
     def _open_translate(self) -> None:
-        """Mở dialog dịch thuật với các file đã checked.
-
-        Nếu file chưa được extract, sẽ trigger extract trước khi mở dialog.
-        """
+        """Mở dialog dịch thuật với các file đã checked."""
         checked_files = self._file_table.get_checked_files()
         if not checked_files:
             QMessageBox.warning(
@@ -567,74 +630,36 @@ class MainWindow(QWidget):
             )
             return
 
-        # Kiểm tra nếu có file chưa extract
-        uncached = [
-            f for f in checked_files
-            if self._extract_module.get_cached(f) is None
-        ]
-        if uncached:
-            file_lines = "\n".join(f"  • {f.name}" for f in uncached)
-            QMessageBox.warning(
-                self,
-                "Chưa extract",
-                f"Các file sau chưa được extract:\n{file_lines}\n\n"
-                "Hãy click vào máy xay để extract trước.",
-            )
-            return
-
         overlay = self._create_overlay()
         dialog = TranslateDialog(checked_files, self)
 
-        # Kết nối Dialog → TranslateModule
-        dialog.translate_requested.connect(self._translate_module.start_translate)
-        dialog.stop_requested.connect(self._translate_module.cancel)
-
-        # Kết nối TranslateModule → Dialog
-        self._translate_module.progress_updated.connect(dialog.update_progress)
-        self._translate_module.translate_completed.connect(
-            lambda s, f, _: dialog.on_translate_done(
-                s, f, str(self._translate_module.output_dir)
+        # Kết nối Dialog → TranslateModule, kèm summary context nếu đã có
+        context = self._summary_context.strip() or None
+        dialog.translate_requested.connect(
+            lambda config: self._translate_module.start_translate(
+                {**config, "context": context}
             )
         )
-        self._translate_module.error_occurred.connect(
-            lambda msg: self._on_translate_error(dialog, msg)
-        )
+        dialog.stop_requested.connect(self._translate_module.cancel)
 
-        # Kết nối cost tracking cho smart mode
-        cost_handler = self._create_cost_handler(dialog)
-        self._translate_module.cost_updated.connect(cost_handler)
+        # Kết nối TranslateModule → Dialog (lưu ref để ngắt sau)
+        def _on_completed(s, f, _):
+            dialog.on_translate_done(s, f, str(self._translate_module.output_dir))
+
+        def _on_error(msg):
+            self._on_translate_error(dialog, msg)
+
+        self._translate_module.status_updated.connect(dialog.update_status)
+        self._translate_module.translate_completed.connect(_on_completed)
+        self._translate_module.error_occurred.connect(_on_error)
 
         dialog.exec()
 
-        # Ngắt kết nối khi đóng dialog
-        self._translate_module.progress_updated.disconnect(dialog.update_progress)
-        self._translate_module.cost_updated.disconnect(cost_handler)
+        # Ngắt toàn bộ kết nối khi đóng dialog
+        self._translate_module.status_updated.disconnect(dialog.update_status)
+        self._translate_module.translate_completed.disconnect(_on_completed)
+        self._translate_module.error_occurred.disconnect(_on_error)
         overlay.deleteLater()
-
-    def _create_cost_handler(self, dialog: TranslateDialog):
-        """Tạo handler cập nhật chi phí AI cho dialog dịch.
-
-        Args:
-            dialog: TranslateDialog cần cập nhật.
-
-        Returns:
-            Callable handler cho signal cost_updated.
-        """
-        accumulated = {"tokens": 0, "cost": 0.0}
-
-        def handler(
-            provider_name: str, model: str,
-            input_tokens: int, output_tokens: int,
-        ) -> None:
-            self._provider_manager.token_counter.add_usage(
-                provider_name, model, input_tokens, output_tokens,
-            )
-            stats = self._provider_manager.token_counter.stats
-            accumulated["tokens"] = stats.total_tokens
-            accumulated["cost"] = stats.total_cost
-            dialog.update_cost(accumulated["tokens"], accumulated["cost"])
-
-        return handler
 
     def _on_translate_error(self, dialog: TranslateDialog, msg: str) -> None:
         """Xử lý lỗi từ TranslateModule — reset dialog và hiển thị lỗi."""

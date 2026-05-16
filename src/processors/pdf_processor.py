@@ -57,15 +57,12 @@ class PdfProcessor(FileProcessor):
                         clean_row = [str(cell) if cell is not None else "" for cell in row]
                         clean_table.append(clean_row)
                     page_table_data.append(clean_table)
-                    # Thêm vào text dạng readable
-                    page_parts.append(f"[Bảng {tbl_idx + 1}]")
-                    for row in clean_table:
-                        page_parts.append("\t".join(row))
+                # Không thêm bảng vào page_parts để tránh gửi trùng lặp lên AI
 
                 if page_parts:
                     text_content[page_key] = "\n".join(page_parts)
                 if page_table_data:
-                    tables[page_key] = page_table_data
+                    tables[f"{page_key}_tables"] = page_table_data
 
                 # Extract images (lấy metadata, dữ liệu ảnh để gửi AI vision)
                 if page.images:

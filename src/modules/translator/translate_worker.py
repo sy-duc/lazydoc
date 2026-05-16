@@ -49,6 +49,7 @@ class TranslateWorker(QThread):
         provider: object | None = None,
         domain: str | None = None,
         style: str | None = None,
+        context: str | None = None,
         parent: object = None,
     ) -> None:
         """Khởi tạo TranslateWorker.
@@ -62,6 +63,7 @@ class TranslateWorker(QThread):
             provider: BaseProvider instance cho chế độ smart (tuỳ chọn).
             domain: Lĩnh vực dịch thuật (tuỳ chọn, chỉ cho smart mode).
             style: Văn phong dịch thuật (tuỳ chọn, chỉ cho smart mode).
+            context: Ngữ cảnh từ kết quả tổng hợp (tuỳ chọn, chỉ cho smart mode).
             parent: QObject cha.
         """
         super().__init__(parent)
@@ -74,6 +76,7 @@ class TranslateWorker(QThread):
         self._provider = provider
         self._domain = domain
         self._style = style
+        self._context = context
         self._cancelled = False
 
     def run(self) -> None:
@@ -86,17 +89,16 @@ class TranslateWorker(QThread):
     def _run_default(self) -> None:
         """Pipeline dịch offline bằng Argos.
 
-        Pipeline: detect ngôn ngữ → tải model → dịch từng file → ghi output.
+        Pipeline: infer ngôn ngữ nguồn → tải model → dịch từng file → ghi output.
         ArgosEngine được tạo tại đây (trên worker thread) để tránh lỗi
         SQLite cross-thread — Argos cache SQLite connection nội bộ.
         """
         # Tạo ArgosEngine trên worker thread để tránh lỗi SQLite cross-thread
         self._argos = ArgosEngine()
 
-        # Bước 1: Phát hiện ngôn ngữ nguồn
-        self.status_updated.emit("Đang phát hiện ngôn ngữ...")
-        source_lang = self._detect_source_lang(self._files[0], self._target_lang)
-        logger.info("Phát hiện ngôn ngữ nguồn: %s", source_lang)
+        # Bước 1: Infer ngôn ngữ nguồn từ ngôn ngữ đích
+        source_lang = self._infer_source_lang(self._target_lang)
+        logger.info("Ngôn ngữ nguồn (inferred): %s → %s", source_lang, self._target_lang)
 
         if self._cancelled:
             return
@@ -123,7 +125,7 @@ class TranslateWorker(QThread):
     def _run_smart(self) -> None:
         """Pipeline dịch thông minh bằng AI Provider.
 
-        Pipeline: detect ngôn ngữ → tra glossary → tạo AI engine
+        Pipeline: tra glossary → tạo AI engine
         → dịch từng file theo 2 pha (collect → batch translate → write).
         """
         from src.modules.translator.ai_engine import AIEngine
@@ -132,33 +134,32 @@ class TranslateWorker(QThread):
             self.error_occurred.emit("Không có AI Provider. Vui lòng cấu hình API key trong Cài đặt.")
             return
 
-        # Bước 1: Phát hiện ngôn ngữ nguồn (dùng Argos detect)
-        self.status_updated.emit("Đang phát hiện ngôn ngữ...")
-        self._argos = ArgosEngine()
-        source_lang = self._detect_source_lang(self._files[0], self._target_lang)
-        logger.info("Phát hiện ngôn ngữ nguồn: %s", source_lang)
-
         if self._cancelled:
             return
 
-        # Bước 2: Tra glossary hai chiều
+        # Bước 1: Tra glossary hai chiều (infer source lang để tra bảng thuật ngữ)
+        source_lang_for_glossary = self._infer_source_lang(self._target_lang)
         glossary: dict[str, str] | None = None
         if self._glossary:
-            glossary = self._glossary.lookup(source_lang, self._target_lang)
+            glossary = self._glossary.lookup(source_lang_for_glossary, self._target_lang)
             if glossary:
                 logger.info("Áp dụng %d thuật ngữ từ bảng thuật ngữ.", len(glossary))
 
         if self._cancelled:
             return
 
-        # Bước 3: Tạo AI Engine
+        # Bước 2: Tạo AI Engine (source_lang=None → AI tự nhận diện ngôn ngữ)
         self.status_updated.emit("Đang kết nối AI Provider...")
+        context = self._context
+        if context:
+            logger.info("Dùng summary context (%d ký tự) làm ngữ cảnh dịch.", len(context))
         ai_engine = AIEngine(
             provider=self._provider,
             target_lang=self._target_lang,
-            source_lang=source_lang,
+            source_lang=None,
             domain=self._domain,
             style=self._style,
+            context=context,
             glossary=glossary,
         )
         ai_engine.set_usage_callback(self._on_ai_usage)
@@ -214,7 +215,7 @@ class TranslateWorker(QThread):
                     break
 
                 # Pha 2: Batch translate
-                self.status_updated.emit(f"Đang dịch AI: {file_path.name}")
+                self.status_updated.emit(f"Đang dịch...")
                 ai_engine.flush_and_translate()
 
                 if self._cancelled:
@@ -232,7 +233,7 @@ class TranslateWorker(QThread):
                 logger.info("Dịch thành công: %s → %s", file_path.name, actual_output.name)
 
             except Exception as e:
-                error_msg = str(e)
+                error_msg = self._format_error(e)
                 self.file_failed.emit(file_path, error_msg)
                 fail_count += 1
                 logger.error("Dịch thất bại: %s — %s", file_path.name, e)
@@ -271,7 +272,7 @@ class TranslateWorker(QThread):
                 logger.info("Dịch thành công: %s → %s", file_path.name, actual_output.name)
 
             except Exception as e:
-                error_msg = str(e)
+                error_msg = self._format_error(e)
                 self.file_failed.emit(file_path, error_msg)
                 fail_count += 1
                 logger.error("Dịch thất bại: %s — %s", file_path.name, e)
@@ -280,6 +281,31 @@ class TranslateWorker(QThread):
             self.progress_updated.emit(percent)
 
         self.all_completed.emit(success_count, fail_count, output_files)
+
+    @staticmethod
+    def _format_error(e: Exception) -> str:
+        """Tạo thông báo lỗi thân thiện cho người dùng.
+
+        Args:
+            e: Exception gốc.
+
+        Returns:
+            Chuỗi thông báo dễ hiểu.
+        """
+        s = str(e).lower()
+        if isinstance(e, MemoryError) or "memory" in s:
+            return "File quá lớn, không đủ bộ nhớ để xử lý."
+        if isinstance(e, UnicodeDecodeError):
+            return "Không thể đọc file — encoding không được hỗ trợ."
+        if "timeout" in s or "timed out" in s:
+            return "API timeout sau nhiều lần thử. Vui lòng thử lại sau."
+        if "rate limit" in s or "429" in s or "too many requests" in s:
+            return "Vượt giới hạn API. Vui lòng chờ vài phút rồi thử lại."
+        if "quota" in s or "billing" in s:
+            return "Hết quota API. Vui lòng kiểm tra tài khoản của bạn."
+        if "invalid" in s or "corrupt" in s or "malformed" in s:
+            return f"File bị hỏng hoặc định dạng không hợp lệ: {e}"
+        return str(e)
 
     def cancel(self) -> None:
         """Yêu cầu hủy dịch. Worker sẽ dừng sau file đang xử lý."""
@@ -291,45 +317,22 @@ class TranslateWorker(QThread):
         """Kiểm tra worker đã bị hủy chưa."""
         return self._cancelled
 
-    def _detect_source_lang(self, file_path: Path, target_lang: str) -> str:
-        """Phát hiện ngôn ngữ nguồn từ nội dung file (chạy trên worker thread).
+    @staticmethod
+    def _infer_source_lang(target_lang: str) -> str:
+        """Infer ngôn ngữ nguồn từ ngôn ngữ đích.
+
+        Argos chỉ hỗ trợ en↔vi, en↔ja, vi↔ja (pivot qua en).
+        Mặc định giả sử tài liệu gốc là tiếng Anh nếu đích là vi/ja,
+        hoặc tiếng Việt nếu đích là en.
 
         Args:
-            file_path: File mẫu.
-            target_lang: Ngôn ngữ đích (loại trừ).
+            target_lang: Mã ngôn ngữ đích.
 
         Returns:
-            Mã ngôn ngữ phát hiện được.
+            Mã ngôn ngữ nguồn.
         """
-        sample_text = ""
-
-        try:
-            ext = file_path.suffix.lower()
-
-            if ext in (".txt", ".csv"):
-                try:
-                    sample_text = file_path.read_text(encoding="utf-8")[:2000]
-                except UnicodeDecodeError:
-                    sample_text = file_path.read_text(encoding="latin-1")[:2000]
-
-            elif ext in (".xlsx", ".xls", ".docx", ".doc", ".pptx", ".ppt"):
-                from src.processors.factory import ProcessorFactory
-                processor = ProcessorFactory.get_processor(file_path)
-                content = processor.extract(file_path)
-                sample_text = content.get_full_text()[:2000]
-
-            elif ext == ".pdf":
-                import pdfplumber
-                with pdfplumber.open(file_path) as pdf:
-                    if pdf.pages:
-                        sample_text = pdf.pages[0].extract_text() or ""
-
-        except Exception as e:
-            logger.warning("Không thể đọc mẫu để phát hiện ngôn ngữ: %s", e)
-
-        detected = self._argos.detect_language(sample_text, exclude_lang=target_lang)
-        logger.info("Phát hiện ngôn ngữ nguồn: %s (từ %s)", detected, file_path.name)
-        return detected
+        defaults = {"vi": "en", "en": "vi", "ja": "en"}
+        return defaults.get(target_lang, "en")
 
     def _make_output_path(
         self, source_path: Path, translate_fn: Callable[[str], str]
