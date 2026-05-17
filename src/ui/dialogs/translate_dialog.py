@@ -15,7 +15,6 @@ from PySide6.QtWidgets import (
     QLayout,
     QLayoutItem,
     QMessageBox,
-    QPushButton,
     QRadioButton,
     QScrollArea,
     QVBoxLayout,
@@ -23,6 +22,8 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.i18n import I18nManager
+from src.ui.components import PrimaryButton, SecondaryButton, StopButton
+from src.ui.design import IconName, app_icon
 
 logger = logging.getLogger(__name__)
 
@@ -208,7 +209,7 @@ class TranslateDialog(QDialog):
         file_container_layout.setSpacing(2)
 
         for file_path in self._files:
-            file_label = QLabel(f"📄 {file_path.name}")
+            file_label = QLabel(file_path.name)
             file_label.setObjectName("fileItem")
             file_label.setToolTip(str(file_path))
             file_container_layout.addWidget(file_label)
@@ -235,19 +236,17 @@ class TranslateDialog(QDialog):
         action_row = QHBoxLayout()
         action_row.setSpacing(10)
 
-        self._glossary_btn = QPushButton(
-            f"📖 {self._i18n.t('translate.btn_glossary')}"
+        self._glossary_btn = SecondaryButton(
+            self._i18n.t("translate.btn_glossary"),
+            IconName.GLOSSARY,
         )
-        self._glossary_btn.setObjectName("glossaryBtn")
-        self._glossary_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._glossary_btn.clicked.connect(self._on_glossary)
         action_row.addWidget(self._glossary_btn)
 
-        self._expand_btn = QPushButton(
-            f"▼ {self._i18n.t('translate.btn_expand')}"
+        self._expand_btn = SecondaryButton(
+            self._i18n.t("translate.btn_expand"),
+            IconName.CHEVRON_DOWN,
         )
-        self._expand_btn.setObjectName("expandBtn")
-        self._expand_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._expand_btn.setCheckable(True)
         self._expand_btn.clicked.connect(self._toggle_expand)
         action_row.addWidget(self._expand_btn)
@@ -340,26 +339,19 @@ class TranslateDialog(QDialog):
         btn_row.setSpacing(10)
         btn_row.addStretch()
 
-        self._cancel_btn = QPushButton(self._i18n.t("settings.btn_cancel"))
-        self._cancel_btn.setObjectName("cancelBtn")
-        self._cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._cancel_btn = SecondaryButton(self._i18n.t("settings.btn_cancel"))
         self._cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(self._cancel_btn)
 
-        self._stop_btn = QPushButton(
-            f"⏹ {self._i18n.t('translate.btn_stop')}"
-        )
-        self._stop_btn.setObjectName("stopBtn")
-        self._stop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._stop_btn = StopButton(self._i18n.t("translate.btn_stop"))
         self._stop_btn.setVisible(False)
         self._stop_btn.clicked.connect(self._on_stop)
         btn_row.addWidget(self._stop_btn)
 
-        self._translate_btn = QPushButton(
-            f"🌐 {self._i18n.t('translate.btn_translate')}"
+        self._translate_btn = PrimaryButton(
+            self._i18n.t("translate.btn_translate"),
+            IconName.LANGUAGE,
         )
-        self._translate_btn.setObjectName("translateBtn")
-        self._translate_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._translate_btn.clicked.connect(self._on_translate)
         btn_row.addWidget(self._translate_btn)
 
@@ -456,76 +448,6 @@ class TranslateDialog(QDialog):
                 border-radius: 6px;
                 padding: 8px;
             }
-            #glossaryBtn {
-                background-color: #313244;
-                color: #cdd6f4;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-size: 12px;
-                font-weight: bold;
-            }
-            #glossaryBtn:hover {
-                background-color: #45475a;
-            }
-            #expandBtn {
-                background-color: #313244;
-                color: #cdd6f4;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-size: 12px;
-                font-weight: bold;
-            }
-            #expandBtn:hover {
-                background-color: #45475a;
-            }
-            #expandBtn:checked {
-                background-color: #45475a;
-            }
-            #translateBtn {
-                background-color: #89b4fa;
-                color: #1e1e2e;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 24px;
-                font-size: 13px;
-                font-weight: bold;
-            }
-            #translateBtn:hover {
-                background-color: #74c7ec;
-            }
-            #translateBtn:pressed {
-                background-color: #94e2d5;
-            }
-            #translateBtn:disabled {
-                background-color: #45475a;
-                color: #6c7086;
-            }
-            #stopBtn {
-                background-color: #f38ba8;
-                color: #1e1e2e;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 24px;
-                font-size: 13px;
-                font-weight: bold;
-            }
-            #stopBtn:hover {
-                background-color: #eba0ac;
-            }
-            #cancelBtn {
-                background-color: #45475a;
-                color: #cdd6f4;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 24px;
-                font-size: 13px;
-                font-weight: bold;
-            }
-            #cancelBtn:hover {
-                background-color: #585b70;
-            }
             #statusLabel {
                 color: #a6adc8;
                 font-size: 12px;
@@ -552,10 +474,8 @@ class TranslateDialog(QDialog):
         """Hiển thị/ẩn vùng tùy chọn mở rộng."""
         expanded = self._expand_btn.isChecked()
         self._expand_area.setVisible(expanded)
-        arrow = "▲" if expanded else "▼"
-        self._expand_btn.setText(
-            f"{arrow} {self._i18n.t('translate.btn_expand')}"
-        )
+        icon_name = IconName.CHEVRON_UP if expanded else IconName.CHEVRON_DOWN
+        self._expand_btn.setIcon(app_icon(icon_name, "text"))
         # Điều chỉnh kích thước dialog (cộng thêm shadow margin)
         m = self._SHADOW_MARGIN * 2
         if expanded:

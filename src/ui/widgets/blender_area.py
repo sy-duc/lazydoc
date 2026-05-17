@@ -1,48 +1,30 @@
-"""BlenderArea — Vùng hoạt ảnh máy xay tài liệu + drag & drop.
+"""BlenderArea — Dropzone xử lý tài liệu.
 
-Vẽ máy xay bằng QPainter với các trạng thái:
-- Idle: máy tĩnh, hiển thị hướng dẫn kéo thả
-- Drag hover: phễu sáng lên, viền highlight
-- Processing: máy rung + lưỡi quay
-- Done: hiệu ứng tài liệu ra output
+Tên class giữ nguyên để tương thích với MainWindow, nhưng visual hiện là vùng
+kéo thả tài liệu gọn và chuyên nghiệp hơn.
 """
-
-import math
 
 from PySide6.QtCore import (
     Property,
     QEasingCurve,
-    QPropertyAnimation,
-    QSequentialAnimationGroup,
-    QRect,
-    QRectF,
     QPointF,
+    QPropertyAnimation,
+    QRectF,
     Qt,
-    QTimer,
     Signal,
 )
-from PySide6.QtGui import (
-    QBrush,
-    QColor,
-    QFont,
-    QLinearGradient,
-    QMouseEvent,
-    QPainter,
-    QPainterPath,
-    QPen,
-)
-from PySide6.QtWidgets import QVBoxLayout, QWidget
+from PySide6.QtGui import QColor, QFont, QMouseEvent, QPainter, QPainterPath, QPen
+from PySide6.QtWidgets import QWidget
 
 from src.core.i18n import I18nManager
+from src.ui.design import COLORS, RADIUS, TYPOGRAPHY
 
 
 class BlenderArea(QWidget):
-    """Vùng hiển thị hoạt ảnh máy xay tài liệu + khu vực kéo thả file."""
+    """Vùng kéo thả file và trigger extract."""
 
-    # Signal khi click vào thân máy xay (trigger extract)
     body_clicked = Signal()
 
-    # Trạng thái máy xay
     STATE_IDLE = "idle"
     STATE_HOVER = "hover"
     STATE_PROCESSING = "processing"
@@ -54,12 +36,9 @@ class BlenderArea(QWidget):
         self._i18n = I18nManager()
         self._state = self.STATE_IDLE
         self._status_text = ""
-
-        # Thuộc tính animation
-        self._shake_offset = 0.0
-        self._blade_angle = 0.0
+        self._activity_progress = 0.0
         self._output_progress = 0.0
-        self._file_drop_y = 0.0  # vị trí file rơi vào phễu
+        self._file_drop_progress = 0.0
 
         self.setObjectName("blenderArea")
         self.setMinimumHeight(160)
@@ -67,20 +46,13 @@ class BlenderArea(QWidget):
 
         self._setup_animations()
 
-    # --- Qt Property cho animation ---
+    # --- Qt animation properties ---
 
-    def _get_shake_offset(self) -> float:
-        return self._shake_offset
+    def _get_activity_progress(self) -> float:
+        return self._activity_progress
 
-    def _set_shake_offset(self, value: float) -> None:
-        self._shake_offset = value
-        self.update()
-
-    def _get_blade_angle(self) -> float:
-        return self._blade_angle
-
-    def _set_blade_angle(self, value: float) -> None:
-        self._blade_angle = value
+    def _set_activity_progress(self, value: float) -> None:
+        self._activity_progress = value
         self.update()
 
     def _get_output_progress(self) -> float:
@@ -90,248 +62,233 @@ class BlenderArea(QWidget):
         self._output_progress = value
         self.update()
 
-    def _get_file_drop_y(self) -> float:
-        return self._file_drop_y
+    def _get_file_drop_progress(self) -> float:
+        return self._file_drop_progress
 
-    def _set_file_drop_y(self, value: float) -> None:
-        self._file_drop_y = value
+    def _set_file_drop_progress(self, value: float) -> None:
+        self._file_drop_progress = value
         self.update()
 
-    shake_offset_prop = Property(float, _get_shake_offset, _set_shake_offset)
-    blade_angle_prop = Property(float, _get_blade_angle, _set_blade_angle)
+    activity_progress_prop = Property(
+        float,
+        _get_activity_progress,
+        _set_activity_progress,
+    )
     output_progress_prop = Property(float, _get_output_progress, _set_output_progress)
-    file_drop_y_prop = Property(float, _get_file_drop_y, _set_file_drop_y)
+    file_drop_progress_prop = Property(
+        float,
+        _get_file_drop_progress,
+        _set_file_drop_progress,
+    )
 
     def _setup_animations(self) -> None:
-        """Tạo các animation object."""
-        # Animation rung máy (lặp liên tục khi processing)
-        self._shake_anim = QPropertyAnimation(self, b"shake_offset_prop")
-        self._shake_anim.setDuration(80)
-        self._shake_anim.setLoopCount(-1)
+        """Tạo animation nhẹ cho processing, drop và done."""
+        self._activity_anim = QPropertyAnimation(self, b"activity_progress_prop")
+        self._activity_anim.setDuration(1000)
+        self._activity_anim.setStartValue(0.0)
+        self._activity_anim.setEndValue(1.0)
+        self._activity_anim.setLoopCount(-1)
+        self._activity_anim.setEasingCurve(QEasingCurve.Type.InOutSine)
 
-        # Animation quay lưỡi (lặp liên tục khi processing)
-        self._blade_anim = QPropertyAnimation(self, b"blade_angle_prop")
-        self._blade_anim.setDuration(600)
-        self._blade_anim.setStartValue(0.0)
-        self._blade_anim.setEndValue(360.0)
-        self._blade_anim.setLoopCount(-1)
-
-        # Animation output (chạy 1 lần khi done)
         self._output_anim = QPropertyAnimation(self, b"output_progress_prop")
-        self._output_anim.setDuration(800)
+        self._output_anim.setDuration(700)
         self._output_anim.setStartValue(0.0)
         self._output_anim.setEndValue(1.0)
         self._output_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
-        # Animation file rơi vào phễu (khi drop)
-        self._file_drop_anim = QPropertyAnimation(self, b"file_drop_y_prop")
-        self._file_drop_anim.setDuration(400)
-        self._file_drop_anim.setEasingCurve(QEasingCurve.Type.InQuad)
-
-        # Timer đổi hướng rung
-        self._shake_direction = 1
-        self._shake_timer = QTimer(self)
-        self._shake_timer.setInterval(80)
-        self._shake_timer.timeout.connect(self._toggle_shake)
-
-    def _toggle_shake(self) -> None:
-        """Đổi hướng rung."""
-        self._shake_direction *= -1
-        self._shake_offset = 2.0 * self._shake_direction
-        self.update()
+        self._file_drop_anim = QPropertyAnimation(self, b"file_drop_progress_prop")
+        self._file_drop_anim.setDuration(450)
+        self._file_drop_anim.setStartValue(0.0)
+        self._file_drop_anim.setEndValue(1.0)
+        self._file_drop_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
     # --- Paint ---
 
     def paintEvent(self, event: object) -> None:
-        """Vẽ máy xay tài liệu."""
+        """Vẽ dropzone tài liệu."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        w = self.width()
-        h = self.height()
-        cx = w / 2 + self._shake_offset
-        # Tính tỷ lệ scale dựa trên kích thước widget
-        scale = min(w / 280, h / 260)
-
-        # Vẽ nền
-        self._draw_background(painter, w, h)
-
-        painter.save()
-        painter.translate(cx, h * 0.45)
-        painter.scale(scale, scale)
-
-        # Vẽ từng phần máy xay
-        self._draw_funnel(painter)
-        self._draw_body(painter)
-        self._draw_blade(painter)
-        self._draw_base(painter)
-
-        if self._state == self.STATE_DONE:
-            self._draw_output(painter)
-
-        painter.restore()
-
-        # Vẽ text hướng dẫn / trạng thái
-        self._draw_text(painter, w, h)
+        rect = QRectF(1, 1, self.width() - 2, self.height() - 2)
+        self._draw_background(painter, rect)
+        self._draw_document_mark(painter, rect)
+        self._draw_text(painter, rect)
 
         painter.end()
 
-    def _draw_background(self, painter: QPainter, w: int, h: int) -> None:
-        """Vẽ nền với viền."""
-        border_color = QColor("#89b4fa") if self._state == self.STATE_HOVER else QColor("#45475a")
-        bg = QColor("#1e1e2e") if self._state != self.STATE_HOVER else QColor("#252540")
-
-        painter.setPen(QPen(border_color, 2, Qt.PenStyle.DashLine))
-        painter.setBrush(QBrush(bg))
-        painter.drawRoundedRect(1, 1, w - 2, h - 2, 12, 12)
-
-    def _draw_funnel(self, painter: QPainter) -> None:
-        """Vẽ phễu (miệng máy) — hình thang ngược."""
-        color = QColor("#585b70")
+    def _draw_background(self, painter: QPainter, rect: QRectF) -> None:
+        """Vẽ nền và border trạng thái."""
+        border = COLORS["border"]
+        bg = COLORS["surface"]
         if self._state == self.STATE_HOVER:
-            color = QColor("#89b4fa")
+            border = COLORS["primary"]
+            bg = COLORS["surface_raised"]
+        elif self._state == self.STATE_PROCESSING:
+            border = COLORS["primary"]
+        elif self._state == self.STATE_DONE:
+            border = COLORS["success"]
+
+        painter.setBrush(QColor(bg))
+        painter.setPen(QPen(QColor(border), 2, Qt.PenStyle.DashLine))
+        painter.drawRoundedRect(rect, RADIUS["xl"], RADIUS["xl"])
+
+    def _draw_document_mark(self, painter: QPainter, rect: QRectF) -> None:
+        """Vẽ biểu tượng tài liệu trung tâm."""
+        size = min(rect.width() * 0.32, rect.height() * 0.42, 82)
+        x = rect.center().x() - size / 2
+        y = rect.top() + max(22, rect.height() * 0.14)
+
+        if self._file_drop_progress > 0:
+            y += (1.0 - self._file_drop_progress) * 18
+
+        if self._state == self.STATE_PROCESSING:
+            y += 2.0 * (self._activity_progress - 0.5)
+
+        doc_rect = QRectF(x, y, size, size * 1.12)
+        fold = size * 0.24
+
+        body_color = QColor(COLORS["surface_raised"])
+        border_color = QColor(COLORS["primary"] if self._state == self.STATE_HOVER else COLORS["border_strong"])
+        if self._state == self.STATE_DONE:
+            border_color = QColor(COLORS["success"])
 
         path = QPainterPath()
-        # Miệng rộng phía trên
-        path.moveTo(-50, -70)
-        path.lineTo(50, -70)
-        # Thu hẹp xuống thân máy
-        path.lineTo(30, -35)
-        path.lineTo(-30, -35)
+        path.moveTo(doc_rect.left(), doc_rect.top())
+        path.lineTo(doc_rect.right() - fold, doc_rect.top())
+        path.lineTo(doc_rect.right(), doc_rect.top() + fold)
+        path.lineTo(doc_rect.right(), doc_rect.bottom())
+        path.lineTo(doc_rect.left(), doc_rect.bottom())
         path.closeSubpath()
 
-        painter.setPen(QPen(color.darker(120), 2))
-        painter.setBrush(QBrush(color))
+        painter.setBrush(body_color)
+        painter.setPen(QPen(border_color, 1.8))
         painter.drawPath(path)
 
-        # Vẽ đường kẻ trang trí miệng phễu
-        painter.setPen(QPen(color.lighter(140), 1))
-        painter.drawLine(-45, -65, 45, -65)
+        fold_path = QPainterPath()
+        fold_path.moveTo(doc_rect.right() - fold, doc_rect.top())
+        fold_path.lineTo(doc_rect.right() - fold, doc_rect.top() + fold)
+        fold_path.lineTo(doc_rect.right(), doc_rect.top() + fold)
+        painter.setBrush(QColor(COLORS["secondary"]))
+        painter.setPen(QPen(border_color, 1.2))
+        painter.drawPath(fold_path)
 
-    def _draw_body(self, painter: QPainter) -> None:
-        """Vẽ thân máy xay — hình chữ nhật bo góc."""
-        body_color = QColor("#45475a")
-        if self._state == self.STATE_PROCESSING:
-            body_color = QColor("#585b70")
-
-        # Thân máy
-        body_rect = QRectF(-35, -38, 70, 60)
-        painter.setPen(QPen(body_color.darker(120), 2))
-
-        gradient = QLinearGradient(0, -38, 0, 22)
-        gradient.setColorAt(0, body_color)
-        gradient.setColorAt(1, body_color.darker(130))
-        painter.setBrush(QBrush(gradient))
-        painter.drawRoundedRect(body_rect, 6, 6)
-
-        # Cửa sổ nhìn bên trong (hình tròn nhỏ)
-        window_color = QColor("#313244")
-        if self._state == self.STATE_PROCESSING:
-            window_color = QColor("#f9e2af")  # sáng vàng khi đang xử lý
-        painter.setPen(QPen(QColor("#6c7086"), 2))
-        painter.setBrush(QBrush(window_color))
-        painter.drawEllipse(QPointF(0, -10), 16, 16)
-
-    def _draw_blade(self, painter: QPainter) -> None:
-        """Vẽ lưỡi xay bên trong cửa sổ (quay khi processing)."""
-        painter.save()
-        painter.translate(0, -10)
-        painter.rotate(self._blade_angle)
-
-        blade_color = QColor("#a6adc8")
-        if self._state == self.STATE_PROCESSING:
-            blade_color = QColor("#cdd6f4")
-
-        painter.setPen(QPen(blade_color, 2))
-        # Vẽ 4 cánh
-        for i in range(4):
-            painter.drawLine(0, 0, 0, -11)
-            painter.rotate(90)
-
-        # Tâm lưỡi
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QBrush(blade_color))
-        painter.drawEllipse(QPointF(0, 0), 3, 3)
-
-        painter.restore()
-
-    def _draw_base(self, painter: QPainter) -> None:
-        """Vẽ đế máy + vòi ra output."""
-        base_color = QColor("#45475a")
-        painter.setPen(QPen(base_color.darker(120), 2))
-        painter.setBrush(QBrush(base_color.darker(110)))
-
-        # Đế máy
-        base_path = QPainterPath()
-        base_path.moveTo(-40, 22)
-        base_path.lineTo(40, 22)
-        base_path.lineTo(35, 35)
-        base_path.lineTo(-35, 35)
-        base_path.closeSubpath()
-        painter.drawPath(base_path)
-
-        # Vòi xuất output (bên phải)
-        spout_color = QColor("#585b70")
-        painter.setPen(QPen(spout_color.darker(120), 2))
-        painter.setBrush(QBrush(spout_color))
-        spout = QPainterPath()
-        spout.moveTo(30, 5)
-        spout.lineTo(55, 10)
-        spout.lineTo(55, 20)
-        spout.lineTo(30, 18)
-        spout.closeSubpath()
-        painter.drawPath(spout)
-
-    def _draw_output(self, painter: QPainter) -> None:
-        """Vẽ hiệu ứng tài liệu ra từ vòi khi hoàn tất."""
-        if self._output_progress <= 0:
-            return
-
-        # Tài liệu output — hình chữ nhật nhỏ giống trang giấy
-        progress = self._output_progress
-        doc_x = 55 + 15 * progress
-        doc_y = 15 + 20 * progress
-        opacity = min(1.0, progress * 2)
-
-        painter.setOpacity(opacity)
-        painter.setPen(QPen(QColor("#a6e3a1"), 1.5))
-        painter.setBrush(QBrush(QColor("#a6e3a1").darker(110)))
-
-        doc_rect = QRectF(doc_x, doc_y, 18, 22)
-        painter.drawRoundedRect(doc_rect, 2, 2)
-
-        # Vẽ dòng text giả trên tài liệu
-        painter.setPen(QPen(QColor("#1e1e2e"), 1))
-        for i in range(3):
-            line_y = doc_y + 6 + i * 5
-            line_w = 12 if i < 2 else 8
+        line_color = QColor(COLORS["text_subtle"])
+        painter.setPen(QPen(line_color, 2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        line_left = doc_rect.left() + size * 0.18
+        line_right = doc_rect.right() - size * 0.18
+        first_line = doc_rect.top() + size * 0.46
+        for idx, scale in enumerate((1.0, 0.78, 0.58)):
+            yy = first_line + idx * size * 0.16
             painter.drawLine(
-                QPointF(doc_x + 3, line_y),
-                QPointF(doc_x + 3 + line_w, line_y),
+                QPointF(line_left, yy),
+                QPointF(line_left + (line_right - line_left) * scale, yy),
             )
 
-        painter.setOpacity(1.0)
+        if self._state == self.STATE_PROCESSING:
+            self._draw_activity_dot(painter, doc_rect)
+        elif self._state == self.STATE_DONE:
+            self._draw_done_check(painter, doc_rect)
 
-    def _draw_text(self, painter: QPainter, w: int, h: int) -> None:
-        """Vẽ text hướng dẫn hoặc trạng thái."""
-        font = QFont()
-        font.setPixelSize(12)
-        painter.setFont(font)
+    def _draw_activity_dot(self, painter: QPainter, doc_rect: QRectF) -> None:
+        """Vẽ dot pulse khi đang xử lý."""
+        radius = 4 + 3 * self._activity_progress
+        opacity = 1.0 - 0.45 * self._activity_progress
+        center_x = doc_rect.center().x()
+        center_y = doc_rect.bottom() + 13
 
-        if self._state == self.STATE_IDLE or self._state == self.STATE_HOVER:
-            text = self._i18n.t("main.drag_drop")
-            painter.setPen(QPen(QColor("#a6adc8")))
-            painter.drawText(QRectF(0, h - 30, w, 24), Qt.AlignmentFlag.AlignCenter, text)
-        elif self._status_text:
-            font.setBold(True)
-            painter.setFont(font)
-            painter.setPen(QPen(QColor("#a6e3a1")))
-            painter.drawText(QRectF(0, h - 30, w, 24), Qt.AlignmentFlag.AlignCenter, self._status_text)
+        painter.save()
+        painter.setOpacity(opacity)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(COLORS["primary"]))
+        painter.drawEllipse(QRectF(center_x - radius, center_y - radius, radius * 2, radius * 2))
+        painter.restore()
+
+    def _draw_done_check(self, painter: QPainter, doc_rect: QRectF) -> None:
+        """Vẽ dấu hoàn tất."""
+        progress = max(0.2, self._output_progress)
+        badge = QRectF(doc_rect.right() - 20, doc_rect.bottom() - 20, 28, 28)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(COLORS["success"]))
+        painter.drawEllipse(badge)
+
+        painter.setPen(QPen(QColor(COLORS["primary_fg"]), 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        start = badge.center()
+        painter.drawLine(
+            QPointF(start.x() - 7, start.y()),
+            QPointF(start.x() - 2, start.y() + 5 * progress),
+        )
+        painter.drawLine(
+            QPointF(start.x() - 2, start.y() + 5 * progress),
+            QPointF(start.x() + 8 * progress, start.y() - 7 * progress),
+        )
+
+    def _draw_text(self, painter: QPainter, rect: QRectF) -> None:
+        """Vẽ heading, mô tả và trạng thái."""
+        heading = TYPOGRAPHY["section"]
+        body = TYPOGRAPHY["caption"]
+
+        title_font = QFont(heading.family, heading.size)
+        title_font.setWeight(heading.weight)
+        painter.setFont(title_font)
+        painter.setPen(QColor(COLORS["text"]))
+
+        title = self._title_text()
+        title_rect = QRectF(rect.left() + 12, rect.bottom() - 72, rect.width() - 24, 22)
+        painter.drawText(title_rect, Qt.AlignmentFlag.AlignCenter, title)
+
+        body_font = QFont(body.family, body.size)
+        body_font.setWeight(body.weight)
+        painter.setFont(body_font)
+        painter.setPen(QColor(COLORS["text_muted"]))
+
+        subtitle = self._subtitle_text()
+        subtitle_rect = QRectF(rect.left() + 16, rect.bottom() - 48, rect.width() - 32, 18)
+        painter.drawText(subtitle_rect, Qt.AlignmentFlag.AlignCenter, subtitle)
+
+        if self._state in (self.STATE_PROCESSING, self.STATE_DONE):
+            self._draw_status_chip(painter, rect)
+
+    def _title_text(self) -> str:
+        if self._state == self.STATE_PROCESSING and self._status_text:
+            return self._status_text
+        if self._state == self.STATE_DONE:
+            return self._i18n.t("dropzone.done")
+        if self._state == self.STATE_HOVER:
+            return self._i18n.t("dropzone.release")
+        return self._i18n.t("dropzone.title")
+
+    def _subtitle_text(self) -> str:
+        if self._state == self.STATE_PROCESSING:
+            return self._i18n.t("dropzone.processing_hint")
+        if self._state == self.STATE_DONE:
+            return self._i18n.t("dropzone.done_hint")
+        return self._i18n.t("dropzone.subtitle")
+
+    def _draw_status_chip(self, painter: QPainter, rect: QRectF) -> None:
+        """Vẽ chip trạng thái nhỏ phía trên."""
+        chip_text = self._i18n.t("dropzone.processing")
+        chip_color = COLORS["primary"]
+        if self._state == self.STATE_DONE:
+            chip_text = self._i18n.t("dropzone.ready")
+            chip_color = COLORS["success"]
+
+        chip_font = QFont(TYPOGRAPHY["caption"].family, TYPOGRAPHY["caption"].size)
+        chip_font.setWeight(700)
+        painter.setFont(chip_font)
+        metrics = painter.fontMetrics()
+        width = metrics.horizontalAdvance(chip_text) + 24
+        chip = QRectF(rect.center().x() - width / 2, rect.top() + 12, width, 24)
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(chip_color))
+        painter.drawRoundedRect(chip, 12, 12)
+        painter.setPen(QColor(COLORS["primary_fg"]))
+        painter.drawText(chip, Qt.AlignmentFlag.AlignCenter, chip_text)
 
     # --- Mouse events ---
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        """Click vào thân máy xay → emit signal extract."""
+        """Click vào dropzone để extract."""
         if event.button() == Qt.MouseButton.LeftButton and self._state != self.STATE_PROCESSING:
             self.body_clicked.emit()
         super().mousePressEvent(event)
@@ -339,30 +296,20 @@ class BlenderArea(QWidget):
     # --- Public API ---
 
     def set_drag_hover(self, hovering: bool) -> None:
-        """Cập nhật trạng thái khi đang kéo file qua vùng này.
-
-        Args:
-            hovering: True nếu đang hover, False nếu không.
-        """
+        """Cập nhật trạng thái khi kéo file vào/rời khỏi vùng dropzone."""
         if hovering:
             self._state = self.STATE_HOVER
-        else:
-            if self._state == self.STATE_HOVER:
-                self._state = self.STATE_IDLE
+        elif self._state == self.STATE_HOVER:
+            self._state = self.STATE_IDLE
         self.update()
 
     def play_file_drop(self) -> None:
-        """Phát animation file rơi vào phễu (khi drop file)."""
-        self._file_drop_anim.setStartValue(0.0)
-        self._file_drop_anim.setEndValue(1.0)
+        """Phát animation khi drop file."""
+        self._file_drop_progress = 0.0
         self._file_drop_anim.start()
 
     def set_status(self, text: str) -> None:
-        """Hiển thị trạng thái xử lý và bắt đầu animation.
-
-        Args:
-            text: Nội dung trạng thái. Chuỗi rỗng để dừng.
-        """
+        """Hiển thị trạng thái xử lý. Chuỗi rỗng để dừng."""
         self._status_text = text
         if text:
             self._state = self.STATE_PROCESSING
@@ -373,7 +320,7 @@ class BlenderArea(QWidget):
         self.update()
 
     def play_done(self) -> None:
-        """Phát animation hoàn tất (output ra tài liệu)."""
+        """Phát trạng thái hoàn tất."""
         self._stop_processing_animation()
         self._state = self.STATE_DONE
         self._output_progress = 0.0
@@ -383,22 +330,20 @@ class BlenderArea(QWidget):
         """Reset về trạng thái ban đầu."""
         self._stop_processing_animation()
         self._output_anim.stop()
+        self._file_drop_anim.stop()
         self._state = self.STATE_IDLE
         self._status_text = ""
-        self._shake_offset = 0.0
-        self._blade_angle = 0.0
+        self._activity_progress = 0.0
         self._output_progress = 0.0
+        self._file_drop_progress = 0.0
         self.update()
 
     def _start_processing_animation(self) -> None:
-        """Bắt đầu animation rung + quay."""
-        if not self._blade_anim.state() == QPropertyAnimation.State.Running:
-            self._blade_anim.start()
-        if not self._shake_timer.isActive():
-            self._shake_timer.start()
+        """Bắt đầu animation processing."""
+        if self._activity_anim.state() != QPropertyAnimation.State.Running:
+            self._activity_anim.start()
 
     def _stop_processing_animation(self) -> None:
-        """Dừng animation rung + quay."""
-        self._blade_anim.stop()
-        self._shake_timer.stop()
-        self._shake_offset = 0.0
+        """Dừng animation processing."""
+        self._activity_anim.stop()
+        self._activity_progress = 0.0

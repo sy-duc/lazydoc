@@ -20,12 +20,13 @@ from src.modules.translator import TranslateModule
 from src.processors.base import ExtractedContent
 from src.processors.factory import ProcessorFactory
 from src.providers.provider_manager import ProviderManager
+from src.ui.design import COLORS, RADIUS
 from src.ui.dialogs.settings_dialog import SettingsDialog
 from src.ui.dialogs.translate_dialog import TranslateDialog
 from src.ui.widgets.file_table import FileTable
 from src.ui.widgets.blender_area import BlenderArea
 from src.ui.widgets.summary_area import SummaryArea
-from src.ui.widgets.cost_tracker import CostTracker
+from src.ui.widgets.processing_controls import ProcessingControls
 from src.ui.widgets.toolbar import Toolbar
 from src.ui.widgets.title_bar import TitleBar
 
@@ -110,9 +111,9 @@ class MainWindow(QWidget):
         self._summary_area = SummaryArea()
         content_layout.addWidget(self._summary_area, stretch=5)
 
-        # Vùng theo dõi chi phí
-        self._cost_tracker = CostTracker()
-        content_layout.addWidget(self._cost_tracker)
+        # Vùng điều khiển xử lý (chỉ hiện nút Dừng khi đang chạy)
+        self._processing_controls = ProcessingControls()
+        content_layout.addWidget(self._processing_controls)
 
         # Thanh công cụ
         self._toolbar = Toolbar()
@@ -127,34 +128,15 @@ class MainWindow(QWidget):
 
     def _setup_style(self) -> None:
         """Áp dụng stylesheet cho cửa sổ."""
-        self.setStyleSheet("""
-            MainWindow {
-                background-color: #1e1e2e;
-                border: 1px solid #45475a;
-                border-radius: 10px;
-            }
-            #content {
-                background-color: #1e1e2e;
-            }
-            #content QLabel {
-                color: #cdd6f4;
-                font-size: 13px;
-            }
-            QPushButton {
-                background-color: #45475a;
-                color: #cdd6f4;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-size: 13px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #585b70;
-            }
-            QPushButton:pressed {
-                background-color: #313244;
-            }
+        self.setStyleSheet(f"""
+            MainWindow {{
+                background-color: {COLORS["bg"]};
+                border: 1px solid {COLORS["border"]};
+                border-radius: {RADIUS["xl"]}px;
+            }}
+            #content {{
+                background-color: {COLORS["bg"]};
+            }}
         """)
 
     def _setup_provider_connections(self) -> None:
@@ -230,8 +212,8 @@ class MainWindow(QWidget):
         self._extract_module.file_failed.connect(self._on_extract_file_failed)
         self._extract_module.extract_completed.connect(self._on_extract_completed)
 
-        # Kết nối nút Stop từ CostTracker
-        self._cost_tracker.stop_clicked.connect(self._on_stop_clicked)
+        # Kết nối nút Stop từ ProcessingControls
+        self._processing_controls.stop_clicked.connect(self._on_stop_clicked)
 
         # Xóa cache khi file bị xóa khỏi bảng
         self._file_table.file_removed.connect(self._extract_module.invalidate)
@@ -315,7 +297,7 @@ class MainWindow(QWidget):
         self._extract_results.clear()
         self._blender.set_status("Extracting...")
         self._toolbar.set_processing(True)
-        self._cost_tracker.set_processing(True)
+        self._processing_controls.set_processing(True)
         self._summary_area.clear()
 
         # Cập nhật trạng thái
@@ -384,7 +366,7 @@ class MainWindow(QWidget):
         # Chuẩn bị UI
         self._blender.set_status("Analysing...")
         self._toolbar.set_processing(True)
-        self._cost_tracker.set_processing(True)
+        self._processing_controls.set_processing(True)
         self._summary_area.clear()
         self._provider_manager.token_counter.reset()
 
@@ -509,7 +491,7 @@ class MainWindow(QWidget):
             else:
                 overview = report[content_start:end_idx].strip()
 
-        return overview + "\n\n─────────────────────────\n💡 Bấm 'Chi tiết ↓' để tải đầy đủ báo cáo phân tích."
+        return overview + f"\n\n{self._i18n.t('summary.detail_hint')}"
 
     def _on_summary_status(self, status: str) -> None:
         """Cập nhật trạng thái blender animation khi summary đang chạy."""
@@ -618,7 +600,7 @@ class MainWindow(QWidget):
         """Reset trạng thái UI về chế độ bình thường (không đang xử lý)."""
         self._blender.set_status("")
         self._toolbar.set_processing(False)
-        self._cost_tracker.set_processing(False)
+        self._processing_controls.set_processing(False)
 
     def _open_translate(self) -> None:
         """Mở dialog dịch thuật với các file đã checked."""
@@ -696,9 +678,14 @@ class MainWindow(QWidget):
         return self._summary_area
 
     @property
-    def cost_tracker(self) -> CostTracker:
-        """Truy cập vùng chi phí."""
-        return self._cost_tracker
+    def processing_controls(self) -> ProcessingControls:
+        """Truy cập vùng điều khiển xử lý."""
+        return self._processing_controls
+
+    @property
+    def cost_tracker(self) -> ProcessingControls:
+        """Truy cập vùng điều khiển xử lý (alias tương thích tên cũ)."""
+        return self._processing_controls
 
     @property
     def blender(self) -> BlenderArea:

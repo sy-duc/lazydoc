@@ -14,6 +14,7 @@ from src.core.database import DatabaseManager
 from src.core.config import ConfigManager
 from src.core.i18n import I18nManager
 from src.providers.provider_manager import ProviderManager
+from src.ui.design import build_global_stylesheet
 from src.ui.main_window import MainWindow
 
 # Cấu hình logging
@@ -50,6 +51,7 @@ def main() -> None:
 
     # Khởi chạy giao diện
     app = QApplication(sys.argv)
+    app.setStyleSheet(build_global_stylesheet())
     window = MainWindow(provider_manager=provider_manager)
     window.show()
     logger.info("LazyDoc khởi động hoàn tất.")

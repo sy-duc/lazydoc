@@ -9,7 +9,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QHBoxLayout,
     QHeaderView,
-    QPushButton,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -17,6 +16,8 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.i18n import I18nManager
+from src.ui.components import IconButton
+from src.ui.design import COLORS, IconName, RADIUS, TYPOGRAPHY
 
 logger = logging.getLogger(__name__)
 
@@ -103,54 +104,46 @@ class FileTable(QWidget):
 
     def _setup_style(self) -> None:
         """Áp dụng stylesheet cho bảng file."""
-        self.setStyleSheet("""
-            #fileTable {
-                background-color: #1e1e2e;
-                alternate-background-color: #181825;
-                color: #cdd6f4;
-                border: 1px solid #45475a;
-                border-radius: 8px;
+        body_type = TYPOGRAPHY["body"]
+        caption_type = TYPOGRAPHY["caption"]
+        self.setStyleSheet(f"""
+            #fileTable {{
+                background-color: {COLORS["surface"]};
+                alternate-background-color: {COLORS["surface_subtle"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
+                border-radius: {RADIUS["lg"]}px;
                 gridline-color: transparent;
-                font-size: 12px;
-            }
-            #fileTable::item {
+                font-family: '{body_type.family}';
+                font-size: {body_type.size}px;
+            }}
+            #fileTable::item {{
                 padding: 4px 8px;
-                border-bottom: 1px solid #313244;
-            }
-            #fileTable QHeaderView::section {
-                background-color: #313244;
-                color: #a6adc8;
+                border-bottom: 1px solid {COLORS["border"]};
+            }}
+            #fileTable QHeaderView::section {{
+                background-color: {COLORS["secondary"]};
+                color: {COLORS["text_muted"]};
                 border: none;
                 padding: 6px 8px;
-                font-size: 11px;
-                font-weight: bold;
-            }
-            QCheckBox {
+                font-family: '{caption_type.family}';
+                font-size: {caption_type.size}px;
+                font-weight: {caption_type.weight};
+            }}
+            QCheckBox {{
                 margin-left: 10px;
-            }
-            QCheckBox::indicator {
+            }}
+            QCheckBox::indicator {{
                 width: 16px;
                 height: 16px;
-                border: 2px solid #585b70;
-                border-radius: 4px;
+                border: 2px solid {COLORS["border_strong"]};
+                border-radius: {RADIUS["sm"]}px;
                 background-color: transparent;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #89b4fa;
-                border-color: #89b4fa;
-            }
-            #deleteBtn {
-                background-color: transparent;
-                color: #a6adc8;
-                border: none;
-                font-size: 14px;
-                padding: 2px;
-                min-width: 24px;
-                max-width: 24px;
-            }
-            #deleteBtn:hover {
-                color: #f38ba8;
-            }
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {COLORS["primary"]};
+                border-color: {COLORS["primary"]};
+            }}
         """)
 
     def add_files(self, paths: list[Path], checked: bool = False) -> None:
@@ -213,10 +206,13 @@ class FileTable(QWidget):
         delete_layout = QHBoxLayout(delete_widget)
         delete_layout.setContentsMargins(0, 0, 0, 0)
         delete_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        delete_btn = QPushButton("🗑")
-        delete_btn.setObjectName("deleteBtn")
-        delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        delete_btn.clicked.connect(lambda checked, r=row, p=path: self._remove_file(p))
+        delete_btn = IconButton(
+            IconName.TRASH,
+            self._i18n.t("main.col_delete"),
+            color="danger",
+            size=28,
+        )
+        delete_btn.clicked.connect(lambda checked, p=path: self._remove_file(p))
         delete_layout.addWidget(delete_btn)
         self._table.setCellWidget(row, COL_DELETE, delete_widget)
 
@@ -240,7 +236,7 @@ class FileTable(QWidget):
         for row in range(self._table.rowCount()):
             widget = self._table.cellWidget(row, COL_DELETE)
             if widget:
-                btn = widget.findChild(QPushButton)
+                btn = widget.findChild(IconButton)
                 if btn:
                     btn.clicked.disconnect()
                     path = self._file_paths[row]

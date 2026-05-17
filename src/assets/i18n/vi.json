@@ -11,6 +11,7 @@
     "btn_settings": "Cài đặt",
     "btn_guide": "Hướng dẫn",
     "btn_about": "Thông tin",
+    "btn_close": "Đóng",
     "btn_stop": "Dừng",
     "col_select": "Chọn",
     "col_filename": "Tên file",
@@ -23,6 +24,26 @@
     "token_label": "Token",
     "no_file_selected": "Chưa có file nào được chọn. Hãy kéo thả file vào và tick chọn.",
     "extract_before_translate": "Vui lòng bấm Xay để trích xuất nội dung trước khi dịch."
+  },
+  "summary": {
+    "title": "Tóm tắt",
+    "detail": "Chi tiết",
+    "placeholder": "Kết quả tổng hợp sẽ hiển thị tại đây...",
+    "disclaimer": "Câu trả lời dựa trên báo cáo tổng hợp, không phải tài liệu gốc.",
+    "qa_placeholder": "Hỏi thêm hoặc focus vào chủ đề...",
+    "send": "Gửi",
+    "question_prefix": "Câu hỏi",
+    "detail_hint": "Báo cáo chi tiết đã sẵn sàng. Bấm Chi tiết để tải đầy đủ báo cáo phân tích."
+  },
+  "dropzone": {
+    "title": "Thả tài liệu vào đây",
+    "release": "Thả để thêm tài liệu",
+    "subtitle": "Hỗ trợ Word, Excel, PDF, PowerPoint, CSV, TXT và hình ảnh.",
+    "processing": "Đang xử lý",
+    "processing_hint": "Bạn có thể dừng tác vụ bằng nút Dừng bên dưới.",
+    "done": "Hoàn tất",
+    "done_hint": "Có thể tiếp tục tổng hợp, dịch hoặc thêm tài liệu khác.",
+    "ready": "Sẵn sàng"
   },
   "settings": {
     "title": "Cài đặt API Key",

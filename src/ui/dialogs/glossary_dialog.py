@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
-    QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
@@ -22,6 +21,8 @@ from PySide6.QtWidgets import (
 
 from src.core.i18n import I18nManager
 from src.modules.glossary.glossary_manager import GlossaryManager
+from src.ui.components import IconButton, PrimaryButton, SecondaryButton
+from src.ui.design import IconName
 
 logger = logging.getLogger(__name__)
 
@@ -150,11 +151,10 @@ class GlossaryDialog(QDialog):
         save_row.setSpacing(10)
         save_row.addStretch()
 
-        self._save_btn = QPushButton(
-            f"{self._i18n.t('glossary.btn_save')}"
+        self._save_btn = PrimaryButton(
+            self._i18n.t("glossary.btn_save"),
+            IconName.CHECK,
         )
-        self._save_btn.setObjectName("saveBtn")
-        self._save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._save_btn.clicked.connect(self._on_save)
         save_row.addWidget(self._save_btn)
 
@@ -189,27 +189,26 @@ class GlossaryDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(10)
 
-        self._import_btn = QPushButton(
-            f"{self._i18n.t('glossary.btn_import')}"
+        self._import_btn = SecondaryButton(
+            self._i18n.t("glossary.btn_import"),
+            IconName.UPLOAD,
         )
-        self._import_btn.setObjectName("importBtn")
-        self._import_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._import_btn.clicked.connect(self._on_import)
         btn_row.addWidget(self._import_btn)
 
-        self._export_btn = QPushButton(
-            f"{self._i18n.t('glossary.btn_export')}"
+        self._export_btn = SecondaryButton(
+            self._i18n.t("glossary.btn_export"),
+            IconName.DOWNLOAD,
         )
-        self._export_btn.setObjectName("exportBtn")
-        self._export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._export_btn.clicked.connect(self._on_export)
         btn_row.addWidget(self._export_btn)
 
         btn_row.addStretch()
 
-        self._close_btn = QPushButton(self._i18n.t("settings.btn_cancel"))
-        self._close_btn.setObjectName("cancelBtn")
-        self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._close_btn = SecondaryButton(
+            self._i18n.t("settings.btn_cancel"),
+            IconName.CLOSE,
+        )
         self._close_btn.clicked.connect(self.accept)
         btn_row.addWidget(self._close_btn)
 
@@ -288,65 +287,6 @@ class GlossaryDialog(QDialog):
                 color: #cdd6f4;
                 font-size: 12px;
             }
-            #editBtn {
-                background-color: transparent;
-                color: #89b4fa;
-                border: none;
-                font-size: 14px;
-                padding: 2px 6px;
-            }
-            #editBtn:hover {
-                color: #74c7ec;
-            }
-            #deleteBtn {
-                background-color: transparent;
-                color: #f38ba8;
-                border: none;
-                font-size: 14px;
-                padding: 2px 6px;
-            }
-            #deleteBtn:hover {
-                color: #eba0ac;
-            }
-            #saveBtn {
-                background-color: #a6e3a1;
-                color: #1e1e2e;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 24px;
-                font-size: 13px;
-                font-weight: bold;
-            }
-            #saveBtn:hover {
-                background-color: #94e2d5;
-            }
-            #saveBtn:pressed {
-                background-color: #74c7ec;
-            }
-            #importBtn, #exportBtn {
-                background-color: #313244;
-                color: #cdd6f4;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-size: 12px;
-                font-weight: bold;
-            }
-            #importBtn:hover, #exportBtn:hover {
-                background-color: #45475a;
-            }
-            #cancelBtn {
-                background-color: #45475a;
-                color: #cdd6f4;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 24px;
-                font-size: 13px;
-                font-weight: bold;
-            }
-            #cancelBtn:hover {
-                background-color: #585b70;
-            }
             QMessageBox {
                 background-color: #e0e0e0;
             }
@@ -397,10 +337,12 @@ class GlossaryDialog(QDialog):
         text_label.setObjectName("entryText")
         row_layout.addWidget(text_label, stretch=1)
 
-        edit_btn = QPushButton("✏")
-        edit_btn.setObjectName("editBtn")
-        edit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        edit_btn.setToolTip(self._i18n.t("glossary.tooltip_edit"))
+        edit_btn = IconButton(
+            IconName.EDIT,
+            self._i18n.t("glossary.tooltip_edit"),
+            color="primary",
+            size=28,
+        )
         edit_btn.clicked.connect(
             lambda _, eid=entry_id, tf=term_from, tt=term_to: self._on_edit(
                 eid, tf, tt
@@ -408,10 +350,12 @@ class GlossaryDialog(QDialog):
         )
         row_layout.addWidget(edit_btn)
 
-        del_btn = QPushButton("✕")
-        del_btn.setObjectName("deleteBtn")
-        del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        del_btn.setToolTip(self._i18n.t("glossary.tooltip_delete"))
+        del_btn = IconButton(
+            IconName.TRASH,
+            self._i18n.t("glossary.tooltip_delete"),
+            color="danger",
+            size=28,
+        )
         del_btn.clicked.connect(
             lambda _, eid=entry_id: self._on_delete(eid)
         )

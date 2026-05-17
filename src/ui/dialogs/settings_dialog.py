@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
-    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -23,6 +22,7 @@ from src.core.database import DatabaseManager
 from src.core.encryption import EncryptionManager
 from src.core.i18n import I18nManager
 from src.providers.provider_manager import ProviderManager
+from src.ui.components import PrimaryButton, SecondaryButton
 
 logger = logging.getLogger(__name__)
 
@@ -130,15 +130,11 @@ class SettingsDialog(QDialog):
         btn_row.setSpacing(10)
         btn_row.addStretch()
 
-        self._cancel_btn = QPushButton(self._i18n.t("settings.btn_cancel"))
-        self._cancel_btn.setObjectName("cancelBtn")
-        self._cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._cancel_btn = SecondaryButton(self._i18n.t("settings.btn_cancel"))
         self._cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(self._cancel_btn)
 
-        self._save_btn = QPushButton(self._i18n.t("settings.btn_save"))
-        self._save_btn.setObjectName("saveBtn")
-        self._save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._save_btn = PrimaryButton(self._i18n.t("settings.btn_save"))
         self._save_btn.clicked.connect(self._on_save)
         btn_row.addWidget(self._save_btn)
 
@@ -205,33 +201,6 @@ class SettingsDialog(QDialog):
             }
             #keyInput:focus {
                 border: 1px solid #89b4fa;
-            }
-            #saveBtn {
-                background-color: #a6e3a1;
-                color: #1e1e2e;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 24px;
-                font-size: 13px;
-                font-weight: bold;
-            }
-            #saveBtn:hover {
-                background-color: #94e2d5;
-            }
-            #saveBtn:pressed {
-                background-color: #74c7ec;
-            }
-            #cancelBtn {
-                background-color: #45475a;
-                color: #cdd6f4;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 24px;
-                font-size: 13px;
-                font-weight: bold;
-            }
-            #cancelBtn:hover {
-                background-color: #585b70;
             }
             QMessageBox {
                 background-color: #e0e0e0;

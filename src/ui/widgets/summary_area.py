@@ -5,13 +5,14 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QPushButton,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
 from src.core.i18n import I18nManager
+from src.ui.components import PrimaryButton, SecondaryButton
+from src.ui.design import COLORS, IconName, RADIUS, TYPOGRAPHY
 
 
 class SummaryArea(QWidget):
@@ -46,14 +47,15 @@ class SummaryArea(QWidget):
 
         # Header với nút Chi tiết
         header = QHBoxLayout()
-        header_label = QLabel("📋 Tóm tắt")
+        header_label = QLabel(self._i18n.t("summary.title"))
         header_label.setObjectName("summaryHeader")
         header.addWidget(header_label)
         header.addStretch()
 
-        self._detail_btn = QPushButton("Chi tiết ↓")
-        self._detail_btn.setObjectName("detailBtn")
-        self._detail_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._detail_btn = SecondaryButton(
+            self._i18n.t("summary.detail"),
+            IconName.DOWNLOAD,
+        )
         self._detail_btn.clicked.connect(self.detail_clicked.emit)
         self._detail_btn.hide()
         header.addWidget(self._detail_btn)
@@ -64,7 +66,7 @@ class SummaryArea(QWidget):
         self._overview_area = QTextEdit()
         self._overview_area.setObjectName("overviewText")
         self._overview_area.setReadOnly(True)
-        self._overview_area.setPlaceholderText("Kết quả tổng hợp sẽ hiển thị tại đây...")
+        self._overview_area.setPlaceholderText(self._i18n.t("summary.placeholder"))
         layout.addWidget(self._overview_area, stretch=2)
 
         # Vùng Q&A (ẩn đến khi user bắt đầu hỏi)
@@ -75,9 +77,7 @@ class SummaryArea(QWidget):
         layout.addWidget(self._qa_area, stretch=3)
 
         # Disclaimer hiển thị khi chờ Q&A response
-        self._disclaimer_label = QLabel(
-            "💡 Câu trả lời dựa trên báo cáo tổng hợp, không phải tài liệu gốc."
-        )
+        self._disclaimer_label = QLabel(self._i18n.t("summary.disclaimer"))
         self._disclaimer_label.setObjectName("disclaimerLabel")
         self._disclaimer_label.hide()
         layout.addWidget(self._disclaimer_label)
@@ -87,13 +87,11 @@ class SummaryArea(QWidget):
         qa_row.setSpacing(6)
         self._qa_input = QLineEdit()
         self._qa_input.setObjectName("qaInput")
-        self._qa_input.setPlaceholderText("Hỏi thêm hoặc focus vào chủ đề...")
+        self._qa_input.setPlaceholderText(self._i18n.t("summary.qa_placeholder"))
         self._qa_input.returnPressed.connect(self._on_send_clicked)
         qa_row.addWidget(self._qa_input)
 
-        self._qa_send_btn = QPushButton("Gửi")
-        self._qa_send_btn.setObjectName("qaSendBtn")
-        self._qa_send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._qa_send_btn = PrimaryButton(self._i18n.t("summary.send"))
         self._qa_send_btn.clicked.connect(self._on_send_clicked)
         qa_row.addWidget(self._qa_send_btn)
 
@@ -104,81 +102,46 @@ class SummaryArea(QWidget):
 
     def _setup_style(self) -> None:
         """Áp dụng stylesheet."""
-        self.setStyleSheet("""
-            #summaryArea {
+        section_type = TYPOGRAPHY["section"]
+        body_type = TYPOGRAPHY["body"]
+        caption_type = TYPOGRAPHY["caption"]
+        self.setStyleSheet(f"""
+            #summaryArea {{
                 background-color: transparent;
-            }
-            #summaryHeader {
-                color: #a6adc8;
-                font-size: 12px;
-                font-weight: bold;
+            }}
+            #summaryHeader {{
+                color: {COLORS["text_muted"]};
+                font-family: '{section_type.family}';
+                font-size: {section_type.size}px;
+                font-weight: {section_type.weight};
                 background: transparent;
                 border: none;
-            }
-            #overviewText {
-                background-color: #181825;
-                color: #cdd6f4;
-                border: 1px solid #45475a;
-                border-radius: 8px;
+            }}
+            #overviewText {{
+                background-color: {COLORS["surface_subtle"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
+                border-radius: {RADIUS["lg"]}px;
                 padding: 10px;
-                font-size: 13px;
-                font-family: monospace;
-            }
-            #qaText {
-                background-color: #11111b;
-                color: #cdd6f4;
-                border: 1px solid #313244;
-                border-radius: 8px;
+                font-family: '{body_type.family}';
+                font-size: {body_type.size}px;
+            }}
+            #qaText {{
+                background-color: {COLORS["surface_subtle"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
+                border-radius: {RADIUS["lg"]}px;
                 padding: 10px;
-                font-size: 13px;
-                font-family: monospace;
-            }
-            #detailBtn {
-                background-color: #89b4fa;
-                color: #1e1e2e;
-                border: none;
-                border-radius: 4px;
-                padding: 4px 12px;
-                font-size: 11px;
-                font-weight: bold;
-            }
-            #detailBtn:hover {
-                background-color: #74c7ec;
-            }
-            #disclaimerLabel {
-                color: #6c7086;
-                font-size: 11px;
+                font-family: '{body_type.family}';
+                font-size: {body_type.size}px;
+            }}
+            #disclaimerLabel {{
+                color: {COLORS["text_subtle"]};
+                font-family: '{caption_type.family}';
+                font-size: {caption_type.size}px;
                 font-style: italic;
                 padding: 2px 0px;
-            }
-            #qaInput {
-                background-color: #181825;
-                color: #cdd6f4;
-                border: 1px solid #45475a;
-                border-radius: 6px;
-                padding: 6px 10px;
-                font-size: 13px;
-            }
-            #qaInput:focus {
-                border-color: #89b4fa;
-            }
-            #qaSendBtn {
-                background-color: #89b4fa;
-                color: #1e1e2e;
-                border: none;
-                border-radius: 6px;
-                padding: 6px 16px;
-                font-size: 13px;
-                font-weight: bold;
-                min-width: 60px;
-            }
-            #qaSendBtn:hover {
-                background-color: #74c7ec;
-            }
-            #qaSendBtn:disabled {
-                background-color: #313244;
-                color: #6c7086;
-            }
+            }}
         """)
 
     def _on_send_clicked(self) -> None:
@@ -248,8 +211,9 @@ class SummaryArea(QWidget):
             self._qa_area.show()
 
         current = self._qa_area.toPlainText()
-        separator = "\n\n" + "─" * 40 + "\n" if current else ""
-        self._qa_area.insertPlainText(f"{separator}❓ {question}\n\n")
+        separator = "\n\n---\n" if current else ""
+        prefix = self._i18n.t("summary.question_prefix")
+        self._qa_area.insertPlainText(f"{separator}{prefix}: {question}\n\n")
         scrollbar = self._qa_area.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 

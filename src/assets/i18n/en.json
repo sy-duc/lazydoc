@@ -11,6 +11,7 @@
     "btn_settings": "Settings",
     "btn_guide": "Guide",
     "btn_about": "About",
+    "btn_close": "Close",
     "btn_stop": "Stop",
     "col_select": "Select",
     "col_filename": "Filename",
@@ -23,6 +24,26 @@
     "token_label": "Tokens",
     "no_file_selected": "No files selected. Please drag & drop files and check them.",
     "extract_before_translate": "Please click Grind to extract content before translating."
+  },
+  "summary": {
+    "title": "Summary",
+    "detail": "Details",
+    "placeholder": "The generated summary will appear here...",
+    "disclaimer": "Answers are based on the summary report, not the original documents.",
+    "qa_placeholder": "Ask a follow-up or focus on a topic...",
+    "send": "Send",
+    "question_prefix": "Question",
+    "detail_hint": "The detailed report is ready. Click Details to download the full analysis."
+  },
+  "dropzone": {
+    "title": "Drop documents here",
+    "release": "Release to add documents",
+    "subtitle": "Supports Word, Excel, PDF, PowerPoint, CSV, TXT, and images.",
+    "processing": "Processing",
+    "processing_hint": "You can stop the task with the Stop button below.",
+    "done": "Done",
+    "done_hint": "You can summarize, translate, or add more documents.",
+    "ready": "Ready"
   },
   "settings": {
     "title": "API Key Settings",
