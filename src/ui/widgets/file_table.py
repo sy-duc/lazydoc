@@ -3,12 +3,13 @@
 import logging
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QSize, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QCheckBox,
     QHBoxLayout,
     QHeaderView,
+    QLabel,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.i18n import I18nManager
+from src.ui import theme
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +49,39 @@ def _format_file_size(size_bytes: int) -> str:
         return f"{size_bytes / (1024 * 1024):.1f} MB"
 
 
+class CheckIcon(QLabel):
+    """Checkbox dạng icon toggle — thay thế QCheckBox mặc định."""
+
+    toggled = Signal(bool)
+
+    def __init__(self, checked: bool = False, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._checked = checked
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setStyleSheet("background: transparent;")
+        self._refresh()
+
+    def _refresh(self) -> None:
+        if self._checked:
+            self.setPixmap(theme.pixmap("checkbox-marked", theme.BLUE, 18))
+        else:
+            self.setPixmap(theme.pixmap("checkbox-blank-outline", theme.SURFACE_2, 18))
+
+    def mousePressEvent(self, event: object) -> None:
+        self._checked = not self._checked
+        self._refresh()
+        self.toggled.emit(self._checked)
+
+    def isChecked(self) -> bool:
+        return self._checked
+
+    def setChecked(self, checked: bool) -> None:
+        if self._checked != checked:
+            self._checked = checked
+            self._refresh()
+
+
 class FileTable(QWidget):
     """Bảng hiển thị danh sách file đã kéo thả."""
 
@@ -69,15 +104,22 @@ class FileTable(QWidget):
         self._table = QTableWidget(0, NUM_COLUMNS)
         self._table.setObjectName("fileTable")
 
-        # Thiết lập header — bỏ label cho cột checkbox và xóa
+        # Thiết lập header — bỏ label cho cột checkbox, status và xóa
         headers = [
             "",
             self._i18n.t("main.col_filename"),
             self._i18n.t("main.col_size"),
-            self._i18n.t("main.col_status"),
+            "",
             "",
         ]
         self._table.setHorizontalHeaderLabels(headers)
+
+        # Căn trái header tên file
+        fname_header = self._table.horizontalHeaderItem(COL_FILENAME)
+        if fname_header:
+            fname_header.setTextAlignment(
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            )
 
         # Cấu hình header
         header = self._table.horizontalHeader()
@@ -89,7 +131,7 @@ class FileTable(QWidget):
 
         self._table.setColumnWidth(COL_SELECT, 50)
         self._table.setColumnWidth(COL_SIZE, 70)
-        self._table.setColumnWidth(COL_STATUS, 120)
+        self._table.setColumnWidth(COL_STATUS, 52)
         self._table.setColumnWidth(COL_DELETE, 40)
 
         # Cấu hình bảng
@@ -177,15 +219,9 @@ class FileTable(QWidget):
         row = self._table.rowCount()
         self._table.insertRow(row)
 
-        # Checkbox chọn
-        checkbox_widget = QWidget()
-        checkbox_layout = QHBoxLayout(checkbox_widget)
-        checkbox_layout.setContentsMargins(0, 0, 0, 0)
-        checkbox_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        checkbox = QCheckBox()
-        checkbox.setChecked(checked)
-        checkbox_layout.addWidget(checkbox)
-        self._table.setCellWidget(row, COL_SELECT, checkbox_widget)
+        # Checkbox dạng icon
+        checkbox = CheckIcon(checked=checked)
+        self._table.setCellWidget(row, COL_SELECT, checkbox)
 
         # Tên file (cắt ngắn nếu quá dài, tooltip hiển thị đầy đủ)
         display_name = path.name
@@ -203,22 +239,25 @@ class FileTable(QWidget):
         size_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         self._table.setItem(row, COL_SIZE, size_item)
 
-        # Trạng thái ban đầu (căn giữa)
-        status_item = QTableWidgetItem("Chưa extract")
-        status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._table.setItem(row, COL_STATUS, status_item)
+        # Trạng thái ban đầu
+        self._table.setCellWidget(row, COL_STATUS, self._make_status_widget("idle"))
 
-        # Nút xóa
+        # Nút xóa (icon)
         delete_widget = QWidget()
         delete_layout = QHBoxLayout(delete_widget)
         delete_layout.setContentsMargins(0, 0, 0, 0)
         delete_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        delete_btn = QPushButton("🗑")
+        delete_btn = QPushButton()
         delete_btn.setObjectName("deleteBtn")
+        delete_btn.setIcon(theme.icon("delete-outline", color=theme.SUBTEXT_0))
+        delete_btn.setIconSize(QSize(16, 16))
+        delete_btn.setToolTip("Xóa file")
         delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         delete_btn.clicked.connect(lambda checked, r=row, p=path: self._remove_file(p))
         delete_layout.addWidget(delete_btn)
         self._table.setCellWidget(row, COL_DELETE, delete_widget)
+
+        self._table.setRowHeight(row, 40)
 
     def _remove_file(self, path: Path) -> None:
         """Xóa file khỏi bảng.
@@ -255,24 +294,48 @@ class FileTable(QWidget):
         checked: list[Path] = []
         for row in range(self._table.rowCount()):
             widget = self._table.cellWidget(row, COL_SELECT)
-            if widget:
-                checkbox = widget.findChild(QCheckBox)
-                if checkbox and checkbox.isChecked():
-                    checked.append(self._file_paths[row])
+            if isinstance(widget, CheckIcon) and widget.isChecked():
+                checked.append(self._file_paths[row])
         return checked
 
+    def _make_status_widget(self, status: str) -> QLabel:
+        """Tạo widget icon cho cột trạng thái.
+
+        Args:
+            status: Khóa trạng thái ('idle', 'processing', 'done', 'error').
+
+        Returns:
+            QLabel với icon tương ứng, nền trong suốt.
+        """
+        label = QLabel()
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label.setStyleSheet("background: transparent;")
+
+        if status == "processing":
+            label.setPixmap(theme.pixmap("progress-clock", theme.YELLOW, 16))
+            label.setToolTip("Đang xử lý")
+        elif status == "done":
+            label.setPixmap(theme.pixmap("check-circle", theme.GREEN, 16))
+            label.setToolTip("Đã xử lý")
+        elif status == "error":
+            label.setPixmap(theme.pixmap("close-circle", theme.RED, 16))
+            label.setToolTip("Lỗi xử lý")
+        else:
+            label.setPixmap(theme.pixmap("clock-outline", theme.MUTED, 16))
+            label.setToolTip("Chưa xử lý")
+
+        return label
+
     def update_file_status(self, path: Path, status: str) -> None:
-        """Cập nhật trạng thái của file trong bảng.
+        """Cập nhật icon trạng thái của file trong bảng.
 
         Args:
             path: Đường dẫn file.
-            status: Trạng thái mới (ví dụ: '✓', '✗', 'Đã dừng').
+            status: Khóa trạng thái ('idle', 'processing', 'done', 'error').
         """
         if path in self._file_paths:
             row = self._file_paths.index(path)
-            item = self._table.item(row, COL_STATUS)
-            if item:
-                item.setText(status)
+            self._table.setCellWidget(row, COL_STATUS, self._make_status_widget(status))
 
     def clear_all(self) -> None:
         """Xóa toàn bộ file trong bảng."""

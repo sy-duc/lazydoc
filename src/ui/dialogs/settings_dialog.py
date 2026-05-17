@@ -4,8 +4,8 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
+from PySide6.QtCore import Qt, QSize
+from PySide6.QtGui import QColor, QIcon
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -13,11 +13,13 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
+
+from src.ui import theme
+from src.ui.dialogs.message_dialog import MessageDialog
 
 from src.core.database import DatabaseManager
 from src.core.encryption import EncryptionManager
@@ -62,7 +64,8 @@ class SettingsDialog(QDialog):
     def _setup_window(self) -> None:
         """Cấu hình dialog."""
         self.setWindowTitle(self._i18n.t("settings.title"))
-        self.setFixedSize(460, 300)
+        self.setMinimumSize(460, 300)
+        self.resize(460, 320)
         self.setWindowFlags(
             Qt.WindowType.Dialog
             | Qt.WindowType.FramelessWindowHint
@@ -233,18 +236,6 @@ class SettingsDialog(QDialog):
             #cancelBtn:hover {
                 background-color: #585b70;
             }
-            QMessageBox {
-                background-color: #e0e0e0;
-            }
-            QMessageBox QLabel {
-                color: #1e1e2e;
-                font-size: 13px;
-            }
-            QMessageBox QPushButton {
-                background-color: #45475a;
-                color: #cdd6f4;
-                min-width: 60px;
-            }
         """.replace("__ARROW_URL__", arrow_url))
 
     def _load_providers(self) -> None:
@@ -316,7 +307,7 @@ class SettingsDialog(QDialog):
 
         # Validation: key trống và chưa có key cũ
         if not new_key and not provider["api_key_enc"]:
-            QMessageBox.warning(
+            MessageDialog.warning(
                 self,
                 self._i18n.t("settings.title"),
                 self._i18n.t("settings.validation_empty"),
@@ -327,7 +318,9 @@ class SettingsDialog(QDialog):
         # Validate API key mới bằng cách gọi API thật
         if new_key and self._provider_manager:
             self._save_btn.setEnabled(False)
-            self._save_btn.setText(self._i18n.t("settings.validating"))
+            self._save_btn.setText("")
+            self._save_btn.setIcon(theme.icon("dots-horizontal", theme.BG_BASE))
+            self._save_btn.setIconSize(QSize(20, 20))
             self._save_btn.repaint()
 
             is_valid = self._provider_manager.validate_api_key(
@@ -335,10 +328,11 @@ class SettingsDialog(QDialog):
             )
 
             self._save_btn.setEnabled(True)
+            self._save_btn.setIcon(QIcon())
             self._save_btn.setText(self._i18n.t("settings.btn_save"))
 
             if not is_valid:
-                QMessageBox.warning(
+                MessageDialog.warning(
                     self,
                     self._i18n.t("settings.title"),
                     self._i18n.t("settings.validation_failed"),
@@ -389,7 +383,7 @@ class SettingsDialog(QDialog):
 
         logger.info("Đã chuyển provider active sang: %s", provider["name"])
 
-        QMessageBox.information(
+        MessageDialog.information(
             self,
             self._i18n.t("settings.title"),
             self._i18n.t("settings.save_success"),
