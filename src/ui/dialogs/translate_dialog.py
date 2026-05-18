@@ -348,6 +348,8 @@ class TranslateDialog(QDialog):
 
         layout.addWidget(self._expand_area)
 
+        layout.addStretch()
+
         # Label trạng thái vui nhộn (thay thế progress bar)
         self._status_label = QLabel("Đang dịch...")
         self._status_label.setObjectName("statusLabel")
@@ -549,13 +551,12 @@ class TranslateDialog(QDialog):
             f"{arrow} {self._i18n.t(label_key)}"
         )
 
-        # Resize vừa đủ nội dung. Collapsed trả về chiều cao ban đầu; expanded
-        # lấy sizeHint thực tế để tránh warning geometry trên Windows.
-        if self.layout():
-            self.layout().activate()
+        # Điều chỉnh kích thước dialog (cộng thêm shadow margin)
         m = self._SHADOW_MARGIN * 2
-        target_height = max(self.minimumHeight(), self.sizeHint().height()) if expanded else 520 + m
-        self.setFixedHeight(target_height)
+        if expanded:
+            self.setFixedHeight(640 + m)
+        else:
+            self.setFixedHeight(520 + m)
 
     def _on_glossary(self) -> None:
         """Mở dialog bảng thuật ngữ."""
