@@ -549,12 +549,13 @@ class TranslateDialog(QDialog):
         self._expand_btn.setText(
             f"{arrow} {self._i18n.t('translate.btn_expand')}"
         )
-        # Điều chỉnh kích thước dialog (cộng thêm shadow margin)
-        m = self._SHADOW_MARGIN * 2
-        if expanded:
-            self.setFixedHeight(640 + m)
-        else:
-            self.setFixedHeight(520 + m)
+
+        # Resize theo sizeHint thực tế của layout. Không hard-code chiều cao,
+        # vì Windows/Qt có thể tính minimum geometry lớn hơn khi radio options wrap.
+        if self.layout():
+            self.layout().activate()
+        target_height = max(self.minimumHeight(), self.sizeHint().height())
+        self.setFixedHeight(target_height)
 
     def _on_glossary(self) -> None:
         """Mở dialog bảng thuật ngữ."""
