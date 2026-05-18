@@ -26,11 +26,12 @@ logger = logging.getLogger(__name__)
 # Thứ tự cột trong bảng
 COL_SELECT = 0
 COL_FILENAME = 1
-COL_SIZE = 2
-COL_STATUS = 3
-COL_DELETE = 4
+COL_FORMAT = 2
+COL_SIZE = 3
+COL_STATUS = 4
+COL_DELETE = 5
 
-NUM_COLUMNS = 5
+NUM_COLUMNS = 6
 
 
 def _format_file_size(size_bytes: int) -> str:
@@ -109,6 +110,7 @@ class FileTable(QWidget):
         headers = [
             "",
             self._i18n.t("main.col_filename"),
+            self._i18n.t("main.col_format"),
             self._i18n.t("main.col_size"),
             "",
             "",
@@ -126,11 +128,13 @@ class FileTable(QWidget):
         header = self._table.horizontalHeader()
         header.setSectionResizeMode(COL_SELECT, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(COL_FILENAME, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(COL_FORMAT, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(COL_SIZE, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(COL_STATUS, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(COL_DELETE, QHeaderView.ResizeMode.Fixed)
 
         self._table.setColumnWidth(COL_SELECT, 50)
+        self._table.setColumnWidth(COL_FORMAT, 72)
         self._table.setColumnWidth(COL_SIZE, 70)
         self._table.setColumnWidth(COL_STATUS, 52)
         self._table.setColumnWidth(COL_DELETE, 40)
@@ -224,15 +228,17 @@ class FileTable(QWidget):
         checkbox = CheckIcon(checked=checked)
         self._table.setCellWidget(row, COL_SELECT, checkbox)
 
-        # Tên file (cắt ngắn nếu quá dài, tooltip hiển thị đầy đủ)
-        display_name = path.name
-        if len(display_name) > 20:
-            stem = path.stem
-            suffix = path.suffix
-            display_name = stem[:16] + "..." + suffix
-        name_item = QTableWidgetItem(display_name)
+        # Tên file không gồm extension; để QTableWidget tự elide theo chiều rộng cột.
+        name_item = QTableWidgetItem(path.stem)
         name_item.setToolTip(str(path))
         self._table.setItem(row, COL_FILENAME, name_item)
+
+        # Định dạng file
+        format_text = path.suffix.lower().lstrip(".") or "-"
+        format_item = QTableWidgetItem(format_text)
+        format_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        format_item.setToolTip(path.suffix.lower() or "Không có định dạng")
+        self._table.setItem(row, COL_FORMAT, format_item)
 
         # Kích thước (căn giữa)
         size = path.stat().st_size
