@@ -162,6 +162,7 @@ class TranslateDialog(QDialog):
             Qt.WindowType.Dialog
             | Qt.WindowType.FramelessWindowHint
         )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setModal(True)
 
     def _setup_ui(self) -> None:
@@ -397,7 +398,7 @@ class TranslateDialog(QDialog):
         arrow_url = arrow_icon.as_posix()
         self.setStyleSheet(f"""
             TranslateDialog {{
-                background-color: {theme.BG_CRUST};
+                background-color: transparent;
             }}
             #panel {{
                 background-color: #262640;

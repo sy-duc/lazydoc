@@ -35,6 +35,7 @@ class AboutDialog(QDialog):
 
     def _setup_window(self) -> None:
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setModal(True)
         self.setMinimumWidth(460)
         self.resize(480, 560)
@@ -195,7 +196,7 @@ class AboutDialog(QDialog):
     def _setup_style(self) -> None:
         self.setStyleSheet(f"""
             AboutDialog {{
-                background-color: {theme.BG_CRUST};
+                background-color: transparent;
             }}
             #aboutPanel {{
                 background-color: {theme.BG_MANTLE};

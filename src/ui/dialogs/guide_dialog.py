@@ -176,6 +176,7 @@ class GuideDialog(QDialog):
 
     def _setup_window(self) -> None:
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setModal(True)
         self.setMinimumSize(580, 500)
         self.resize(600, 540)
@@ -240,7 +241,7 @@ class GuideDialog(QDialog):
     def _setup_style(self) -> None:
         self.setStyleSheet(f"""
             GuideDialog {{
-                background-color: {theme.BG_CRUST};
+                background-color: transparent;
             }}
             #guidePanel {{
                 background-color: {theme.BG_MANTLE};

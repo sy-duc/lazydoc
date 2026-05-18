@@ -38,6 +38,7 @@ class MessageDialog(QDialog):
 
     def _setup_window(self) -> None:
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setModal(True)
         self.setMinimumWidth(340)
         self.setMaximumWidth(480)
@@ -130,7 +131,7 @@ class MessageDialog(QDialog):
     def _setup_style(self) -> None:
         self.setStyleSheet(f"""
             MessageDialog {{
-                background-color: {theme.BG_CRUST};
+                background-color: transparent;
             }}
             #msgPanel {{
                 background-color: {theme.SURFACE_0};
@@ -177,19 +178,45 @@ class MessageDialog(QDialog):
     # --- Static helpers ---
 
     @staticmethod
+    def _exec_with_overlay(dialog: "MessageDialog") -> None:
+        overlay = None
+        parent = dialog.parentWidget()
+        if parent is not None:
+            overlay = QWidget(parent)
+            overlay.setObjectName("messageOverlay")
+            overlay.setStyleSheet(
+                "#messageOverlay { background-color: rgba(0, 0, 0, 120); }"
+            )
+            overlay.setGeometry(parent.rect())
+            overlay.show()
+            overlay.raise_()
+
+        try:
+            dialog.exec()
+        finally:
+            if overlay is not None:
+                overlay.deleteLater()
+
+    @staticmethod
     def information(parent: QWidget | None, title: str, text: str) -> None:
-        MessageDialog(parent, title, text, "info", "ok").exec()
+        MessageDialog._exec_with_overlay(
+            MessageDialog(parent, title, text, "info", "ok")
+        )
 
     @staticmethod
     def warning(parent: QWidget | None, title: str, text: str) -> None:
-        MessageDialog(parent, title, text, "warning", "ok").exec()
+        MessageDialog._exec_with_overlay(
+            MessageDialog(parent, title, text, "warning", "ok")
+        )
 
     @staticmethod
     def critical(parent: QWidget | None, title: str, text: str) -> None:
-        MessageDialog(parent, title, text, "error", "ok").exec()
+        MessageDialog._exec_with_overlay(
+            MessageDialog(parent, title, text, "error", "ok")
+        )
 
     @staticmethod
     def question(parent: QWidget | None, title: str, text: str) -> bool:
         dlg = MessageDialog(parent, title, text, "question", "yesno")
-        dlg.exec()
+        MessageDialog._exec_with_overlay(dlg)
         return dlg._confirmed

@@ -70,6 +70,7 @@ class GlossaryDialog(QDialog):
             Qt.WindowType.Dialog
             | Qt.WindowType.FramelessWindowHint
         )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setModal(True)
 
     def _setup_ui(self) -> None:
@@ -254,7 +255,7 @@ class GlossaryDialog(QDialog):
         arrow_url = arrow_icon.as_posix()
         self.setStyleSheet(f"""
             GlossaryDialog {{
-                background-color: {theme.BG_CRUST};
+                background-color: transparent;
             }}
             #panel {{
                 background-color: #262640;

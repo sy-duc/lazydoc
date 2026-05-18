@@ -71,6 +71,7 @@ class SettingsDialog(QDialog):
             Qt.WindowType.Dialog
             | Qt.WindowType.FramelessWindowHint
         )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setModal(True)
 
     def _setup_ui(self) -> None:
@@ -164,7 +165,7 @@ class SettingsDialog(QDialog):
         arrow_url = arrow_icon.as_posix()
         self.setStyleSheet("""
             SettingsDialog {
-                background-color: #11111b;
+                background-color: transparent;
             }
             #panel {
                 background-color: #262640;
