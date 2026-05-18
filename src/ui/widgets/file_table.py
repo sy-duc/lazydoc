@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QSize, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
@@ -82,6 +82,31 @@ class CheckIcon(QLabel):
         if self._checked != checked:
             self._checked = checked
             self._refresh()
+
+
+class ElidedLabel(QLabel):
+    """Label tự elide theo chiều rộng thực tế của cell."""
+
+    def __init__(self, text: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._full_text = text
+        self.setToolTip(text)
+        self.setStyleSheet("background: transparent; color: #cdd6f4; padding: 0 4px;")
+        self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+
+    def text(self) -> str:
+        return self._full_text
+
+    def paintEvent(self, event: object) -> None:
+        painter = QPainter(self)
+        painter.setPen(self.palette().color(self.foregroundRole()))
+        rect = self.contentsRect().adjusted(4, 0, -4, 0)
+        elided = self.fontMetrics().elidedText(
+            self._full_text,
+            Qt.TextElideMode.ElideRight,
+            max(0, rect.width()),
+        )
+        painter.drawText(rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, elided)
 
 
 class FileTable(QWidget):
@@ -228,10 +253,10 @@ class FileTable(QWidget):
         checkbox = CheckIcon(checked=checked)
         self._table.setCellWidget(row, COL_SELECT, checkbox)
 
-        # Tên file không gồm extension; để QTableWidget tự elide theo chiều rộng cột.
-        name_item = QTableWidgetItem(path.stem)
-        name_item.setToolTip(str(path))
-        self._table.setItem(row, COL_FILENAME, name_item)
+        # Tên file không gồm extension; custom label dùng hết chiều rộng cell rồi mới elide.
+        name_label = ElidedLabel(path.stem)
+        name_label.setToolTip(str(path))
+        self._table.setCellWidget(row, COL_FILENAME, name_label)
 
         # Định dạng file
         format_text = path.suffix.lower().lstrip(".") or "-"
