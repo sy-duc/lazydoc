@@ -136,6 +136,9 @@ class SettingsDialog(QDialog):
         self._open_log_btn = QPushButton(self._i18n.t("settings.btn_open_logs"))
         self._open_log_btn.setObjectName("openLogBtn")
         self._open_log_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._open_log_btn.setIcon(theme.icon("folder-open-outline", color=theme.SUBTEXT_0))
+        self._open_log_btn.setIconSize(QSize(14, 14))
+        self._open_log_btn.setToolTip(self._i18n.t("settings.btn_open_logs"))
         self._open_log_btn.clicked.connect(self._on_open_logs)
         btn_row.addWidget(self._open_log_btn)
 
@@ -232,7 +235,20 @@ class SettingsDialog(QDialog):
             #saveBtn:pressed {
                 background-color: #74c7ec;
             }
-            #openLogBtn, #cancelBtn {
+            #openLogBtn {
+                background-color: transparent;
+                color: #a6adc8;
+                border: 1px solid #45475a;
+                border-radius: 6px;
+                padding: 5px 10px;
+                font-size: 12px;
+                font-weight: normal;
+            }
+            #openLogBtn:hover {
+                background-color: #313244;
+                color: #cdd6f4;
+            }
+            #cancelBtn {
                 background-color: #45475a;
                 color: #cdd6f4;
                 border: none;
@@ -241,7 +257,7 @@ class SettingsDialog(QDialog):
                 font-size: 13px;
                 font-weight: bold;
             }
-            #openLogBtn:hover, #cancelBtn:hover {
+            #cancelBtn:hover {
                 background-color: #585b70;
             }
         """.replace("__ARROW_URL__", arrow_url))

@@ -157,7 +157,7 @@ class TranslateDialog(QDialog):
         self.setWindowTitle(self._i18n.t("translate.title"))
         m = self._SHADOW_MARGIN * 2
         self.setMinimumSize(500 + m, 520 + m)
-        self.resize(500 + m, 560 + m)
+        self.resize(500 + m, 640 + m)
         self.setWindowFlags(
             Qt.WindowType.Dialog
             | Qt.WindowType.FramelessWindowHint
@@ -557,7 +557,7 @@ class TranslateDialog(QDialog):
             target_height = max(640 + m, self.minimumSizeHint().height())
             self.setFixedHeight(target_height)
         else:
-            self.setFixedHeight(520 + m)
+            self.setFixedHeight(640 + m)
 
     def _on_glossary(self) -> None:
         """Mở dialog bảng thuật ngữ."""
