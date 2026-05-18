@@ -5,6 +5,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
+from src.core.logging_config import safe_file_label
 from src.modules.extract.extract_worker import ExtractWorker
 from src.processors.base import ExtractedContent
 
@@ -66,7 +67,7 @@ class ExtractModule(QObject):
                 # Trả kết quả từ cache ngay lập tức
                 self.file_completed.emit(file_path, self._cache[file_path])
                 cached_count += 1
-                logger.info("Cache hit: %s", file_path.name)
+                logger.info("Extract cache hit: %s", safe_file_label(file_path))
             else:
                 uncached_files.append(file_path)
 
@@ -116,7 +117,7 @@ class ExtractModule(QObject):
         """
         if file_path in self._cache:
             del self._cache[file_path]
-            logger.info("Đã xóa cache: %s", file_path.name)
+            logger.info("Đã xóa extract cache: %s", safe_file_label(file_path))
 
     def clear_cache(self) -> None:
         """Xóa toàn bộ cache."""

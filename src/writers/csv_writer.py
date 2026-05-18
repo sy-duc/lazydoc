@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 from typing import Callable
 
+from src.core.logging_config import safe_file_label
 from src.writers.base import FileWriter
 
 logger = logging.getLogger(__name__)
@@ -57,4 +58,4 @@ class CsvWriter(FileWriter):
             writer = csv.writer(f, dialect=dialect)
             writer.writerows(rows)
 
-        logger.info("Đã ghi file csv: %s (%d hàng)", output_path.name, len(rows))
+        logger.info("Đã ghi file csv: %s (%d hàng)", safe_file_label(output_path), len(rows))

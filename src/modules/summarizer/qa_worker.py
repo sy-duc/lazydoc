@@ -5,6 +5,7 @@ import time
 
 from PySide6.QtCore import QThread, Signal
 
+from src.core.logging_config import sanitize_error
 from src.providers.base import BaseProvider
 
 logger = logging.getLogger(__name__)
@@ -107,12 +108,12 @@ class QAWorker(QThread):
                     delay = _RETRY_BASE_DELAY * (2 ** attempt)
                     logger.warning(
                         "QA API lỗi tạm thời (lần %d/%d), thử lại sau %.0fs: %s",
-                        attempt + 1, _MAX_RETRIES, delay, e,
+                        attempt + 1, _MAX_RETRIES, delay, sanitize_error(e),
                     )
                     time.sleep(delay)
 
         except Exception as e:
-            logger.error("QA worker lỗi: %s", e, exc_info=True)
+            logger.error("QA worker lỗi: %s", sanitize_error(e), exc_info=True)
             self.completed.emit(False, str(e))
 
     def cancel(self) -> None:

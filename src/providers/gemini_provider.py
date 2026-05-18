@@ -7,6 +7,7 @@ from collections.abc import Generator
 from google import genai
 from google.genai import types
 
+from src.core.logging_config import sanitize_error
 from src.providers.base import BaseProvider, StreamChunk
 
 logger = logging.getLogger(__name__)
@@ -100,7 +101,7 @@ class GeminiProvider(BaseProvider):
                 logger.info("Gemini models available: %s", models)
                 return GeminiProvider._cached_models
         except Exception as e:
-            logger.warning("Không thể lấy danh sách model Gemini: %s. Dùng fallback.", e)
+            logger.warning("Không thể lấy danh sách model Gemini: %s. Dùng fallback.", sanitize_error(e))
 
         GeminiProvider._cached_models = self._FALLBACK_MODELS
         return GeminiProvider._cached_models
@@ -167,7 +168,7 @@ class GeminiProvider(BaseProvider):
                 output_tokens=usage.candidates_token_count if usage else 0,
             )
         except Exception as e:
-            logger.error("Gemini describe_image lỗi: %s", e)
+            logger.error("Gemini describe_image lỗi: %s", sanitize_error(e))
             raise
 
     def validate_key(self) -> bool:
@@ -182,7 +183,7 @@ class GeminiProvider(BaseProvider):
             if "permission" in error_str or "authenticat" in error_str or "api key" in error_str:
                 logger.warning("Gemini API key không hợp lệ.")
                 return False
-            logger.error("Gemini validate_key lỗi: %s", e)
+            logger.error("Gemini validate_key lỗi: %s", sanitize_error(e))
             return False
 
     def _stream_text(
@@ -221,5 +222,5 @@ class GeminiProvider(BaseProvider):
                 output_tokens=usage.candidates_token_count if usage else 0,
             )
         except Exception as e:
-            logger.error("Gemini streaming lỗi: %s", e)
+            logger.error("Gemini streaming lỗi: %s", sanitize_error(e))
             raise

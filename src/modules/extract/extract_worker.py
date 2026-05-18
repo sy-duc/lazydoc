@@ -5,6 +5,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
+from src.core.logging_config import safe_file_label, sanitize_error
 from src.processors.base import ExtractedContent
 from src.processors.factory import ProcessorFactory
 
@@ -54,13 +55,17 @@ class ExtractWorker(QThread):
                 content = processor.extract(file_path)
                 self.file_completed.emit(file_path, content)
                 success_count += 1
-                logger.info("Extract thành công: %s", file_path.name)
+                logger.info("Extract thành công: %s", safe_file_label(file_path))
 
             except Exception as e:
                 error_msg = str(e)
                 self.file_failed.emit(file_path, error_msg)
                 fail_count += 1
-                logger.error("Extract thất bại: %s — %s", file_path.name, e)
+                logger.error(
+                    "Extract thất bại: %s - %s",
+                    safe_file_label(file_path),
+                    sanitize_error(e),
+                )
 
         self.all_completed.emit(success_count, fail_count)
 

@@ -3,6 +3,7 @@
 import logging
 from pathlib import Path
 
+from src.core.logging_config import safe_file_label
 from src.processors.base import ExtractedContent, FileProcessor
 
 logger = logging.getLogger(__name__)
@@ -109,7 +110,7 @@ class ExcelProcessor(FileProcessor):
 
         logger.info(
             "Đã extract file xlsx: %s (%d sheet, %d shapes, %d ảnh)",
-            file_path.name, len(wb.sheetnames), total_shapes, len(images),
+            safe_file_label(file_path), len(wb.sheetnames), total_shapes, len(images),
         )
         return content
 
@@ -175,5 +176,5 @@ class ExcelProcessor(FileProcessor):
             metadata={"sheets": wb.nsheets, "sheet_names": ", ".join(wb.sheet_names())},
         )
 
-        logger.info("Đã extract file xls: %s (%d sheet)", file_path.name, wb.nsheets)
+        logger.info("Đã extract file xls: %s (%d sheet)", safe_file_label(file_path), wb.nsheets)
         return content

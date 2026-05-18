@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QLayout,
     QLayoutItem,
-    QMessageBox,
     QPushButton,
     QRadioButton,
     QScrollArea,
@@ -23,6 +22,8 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.i18n import I18nManager
+from src.ui import theme
+from src.ui.dialogs.message_dialog import MessageDialog
 
 logger = logging.getLogger(__name__)
 
@@ -155,11 +156,13 @@ class TranslateDialog(QDialog):
         """Cấu hình dialog."""
         self.setWindowTitle(self._i18n.t("translate.title"))
         m = self._SHADOW_MARGIN * 2
-        self.setFixedSize(500 + m, 520 + m)
+        self.setMinimumSize(500 + m, 520 + m)
+        self.resize(500 + m, 640 + m)
         self.setWindowFlags(
             Qt.WindowType.Dialog
             | Qt.WindowType.FramelessWindowHint
         )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setModal(True)
 
     def _setup_ui(self) -> None:
@@ -197,7 +200,7 @@ class TranslateDialog(QDialog):
         file_scroll = QScrollArea()
         file_scroll.setObjectName("fileScroll")
         file_scroll.setWidgetResizable(True)
-        file_scroll.setMaximumHeight(100)
+        file_scroll.setMaximumHeight(65)
         file_scroll.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
@@ -208,7 +211,7 @@ class TranslateDialog(QDialog):
         file_container_layout.setSpacing(2)
 
         for file_path in self._files:
-            file_label = QLabel(f"📄 {file_path.name}")
+            file_label = QLabel(f"  {file_path.name}")
             file_label.setObjectName("fileItem")
             file_label.setToolTip(str(file_path))
             file_container_layout.addWidget(file_label)
@@ -217,27 +220,47 @@ class TranslateDialog(QDialog):
         file_scroll.setWidget(file_container)
         layout.addWidget(file_scroll)
 
-        # Selectbox ngôn ngữ đích
+        # Separator
+        sep1 = QWidget()
+        sep1.setObjectName("separator")
+        sep1.setFixedHeight(1)
+        layout.addWidget(sep1)
+
+        # Ngôn ngữ đích
+        lang_section_lbl = QLabel(self._i18n.t("translate.target_language"))
+        lang_section_lbl.setObjectName("sectionLabel")
+        layout.addWidget(lang_section_lbl)
+
         lang_row = QHBoxLayout()
         lang_row.setSpacing(10)
-        lang_lbl = QLabel(self._i18n.t("translate.target_language"))
-        lang_lbl.setFixedWidth(100)
         self._lang_combo = QComboBox()
         self._lang_combo.setObjectName("langCombo")
         self._lang_combo.setCursor(Qt.CursorShape.PointingHandCursor)
         for code, name in TARGET_LANGUAGES:
             self._lang_combo.addItem(name, code)
-        lang_row.addWidget(lang_lbl)
         lang_row.addWidget(self._lang_combo, stretch=1)
         layout.addLayout(lang_row)
+
+        # Separator
+        sep2 = QWidget()
+        sep2.setObjectName("separator")
+        sep2.setFixedHeight(1)
+        layout.addWidget(sep2)
+
+        # Tùy chọn nâng cao
+        adv_section_lbl = QLabel("Tùy chọn")
+        adv_section_lbl.setObjectName("sectionLabel")
+        layout.addWidget(adv_section_lbl)
 
         # Hàng nút: Bảng thuật ngữ + Mở rộng
         action_row = QHBoxLayout()
         action_row.setSpacing(10)
 
         self._glossary_btn = QPushButton(
-            f"📖 {self._i18n.t('translate.btn_glossary')}"
+            f"  {self._i18n.t('translate.btn_glossary')}"
         )
+        self._glossary_btn.setIcon(theme.icon("book-open-outline", color=theme.SUBTEXT_0))
+        self._glossary_btn.setIconSize(QSize(14, 14))
         self._glossary_btn.setObjectName("glossaryBtn")
         self._glossary_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._glossary_btn.clicked.connect(self._on_glossary)
@@ -347,8 +370,10 @@ class TranslateDialog(QDialog):
         btn_row.addWidget(self._cancel_btn)
 
         self._stop_btn = QPushButton(
-            f"⏹ {self._i18n.t('translate.btn_stop')}"
+            f"  {self._i18n.t('translate.btn_stop')}"
         )
+        self._stop_btn.setIcon(theme.icon("stop-circle-outline", color=theme.BG_BASE))
+        self._stop_btn.setIconSize(QSize(14, 14))
         self._stop_btn.setObjectName("stopBtn")
         self._stop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._stop_btn.setVisible(False)
@@ -356,8 +381,10 @@ class TranslateDialog(QDialog):
         btn_row.addWidget(self._stop_btn)
 
         self._translate_btn = QPushButton(
-            f"🌐 {self._i18n.t('translate.btn_translate')}"
+            f"  {self._i18n.t('translate.btn_translate')}"
         )
+        self._translate_btn.setIcon(theme.icon("translate", color=theme.BG_BASE))
+        self._translate_btn.setIconSize(QSize(14, 14))
         self._translate_btn.setObjectName("translateBtn")
         self._translate_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._translate_btn.clicked.connect(self._on_translate)
@@ -369,182 +396,149 @@ class TranslateDialog(QDialog):
         """Áp dụng stylesheet cho dialog."""
         arrow_icon = Path(__file__).resolve().parent.parent.parent / "assets" / "icons" / "dropdown_arrow.svg"
         arrow_url = arrow_icon.as_posix()
-        self.setStyleSheet("""
-            TranslateDialog {
-                background-color: #11111b;
-            }
-            #panel {
+        self.setStyleSheet(f"""
+            TranslateDialog {{
+                background-color: transparent;
+            }}
+            #panel {{
                 background-color: #262640;
-                border: 1px solid #585b70;
-                border-radius: 10px;
-            }
-            #dialogTitle {
-                color: #cdd6f4;
-                font-size: 16px;
+                border: 1px solid {theme.SURFACE_2};
+                border-radius: {theme.RADIUS_LG}px;
+            }}
+            #dialogTitle {{
+                color: {theme.TEXT};
+                font-size: {theme.FONT_LG}px;
                 font-weight: bold;
-            }
-            #sectionLabel {
-                color: #a6adc8;
-                font-size: 12px;
+            }}
+            #sectionLabel {{
+                color: {theme.SUBTEXT_0};
+                font-size: {theme.FONT_SM}px;
                 font-weight: bold;
-            }
-            #fileScroll {
-                background-color: #181825;
-                border: 1px solid #313244;
-                border-radius: 6px;
-            }
-            #fileScroll QWidget {
-                background-color: #181825;
-            }
-            #fileItem {
-                color: #cdd6f4;
-                font-size: 12px;
+            }}
+            #separator {{
+                background-color: {theme.SURFACE_0};
+            }}
+            #fileScroll {{
+                background-color: {theme.BG_MANTLE};
+                border: 1px solid {theme.SURFACE_0};
+                border-radius: {theme.RADIUS_SM}px;
+            }}
+            #fileScroll QWidget {{
+                background-color: {theme.BG_MANTLE};
+            }}
+            #fileItem {{
+                color: {theme.TEXT};
+                font-size: {theme.FONT_SM}px;
                 padding: 2px 0;
-            }
-            QLabel {
-                color: #cdd6f4;
-                font-size: 13px;
-            }
-            #langCombo {
-                background-color: #313244;
-                color: #cdd6f4;
-                border: 1px solid #45475a;
-                border-radius: 6px;
+            }}
+            QLabel {{
+                color: {theme.TEXT};
+                font-size: {theme.FONT_MD}px;
+            }}
+            #langCombo {{
+                background-color: {theme.SURFACE_0};
+                color: {theme.TEXT};
+                border: 1px solid {theme.SURFACE_1};
+                border-radius: {theme.RADIUS_MD}px;
                 padding: 6px 10px;
-                font-size: 13px;
-            }
-            #langCombo::drop-down {
-                border: none;
-                width: 24px;
-            }
-            #langCombo::down-arrow {
-                image: url(__ARROW_URL__);
-                width: 10px;
-                height: 6px;
-                margin-right: 8px;
-            }
-            #langCombo QAbstractItemView {
-                background-color: #313244;
-                color: #cdd6f4;
-                border: 1px solid #45475a;
-                selection-background-color: #45475a;
+                font-size: {theme.FONT_MD}px;
+            }}
+            #langCombo::drop-down {{ border: none; width: 24px; }}
+            #langCombo::down-arrow {{
+                image: url({arrow_url});
+                width: 10px; height: 6px; margin-right: 8px;
+            }}
+            #langCombo QAbstractItemView {{
+                background-color: {theme.SURFACE_0};
+                color: {theme.TEXT};
+                border: 1px solid {theme.SURFACE_1};
+                selection-background-color: {theme.SURFACE_1};
                 outline: none;
-            }
-            #optionRadio {
-                color: #cdd6f4;
-                font-size: 12px;
+            }}
+            #optionRadio {{
+                color: {theme.TEXT};
+                font-size: {theme.FONT_SM}px;
                 spacing: 6px;
                 padding: 4px 8px;
-            }
-            #optionRadio::indicator {
-                width: 14px;
-                height: 14px;
-                border: 2px solid #585b70;
+            }}
+            #optionRadio::indicator {{
+                width: 14px; height: 14px;
+                border: 2px solid {theme.SURFACE_2};
                 border-radius: 9px;
                 background-color: transparent;
-            }
-            #optionRadio::indicator:checked {
-                background-color: #89b4fa;
-                border-color: #89b4fa;
-            }
-            #optionRadio:disabled {
-                color: #6c7086;
-            }
-            #expandArea {
-                background-color: #181825;
-                border: 1px solid #313244;
-                border-radius: 6px;
+            }}
+            #optionRadio::indicator:checked {{
+                background-color: {theme.BLUE};
+                border-color: {theme.BLUE};
+            }}
+            #optionRadio:disabled {{ color: {theme.MUTED}; }}
+            #expandArea {{
+                background-color: {theme.BG_MANTLE};
+                border: 1px solid {theme.SURFACE_0};
+                border-radius: {theme.RADIUS_MD}px;
                 padding: 8px;
-            }
-            #glossaryBtn {
-                background-color: #313244;
-                color: #cdd6f4;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-size: 12px;
+            }}
+            #glossaryBtn, #expandBtn {{
+                background-color: {theme.SURFACE_0};
+                color: {theme.TEXT};
+                border: 1px solid {theme.SURFACE_1};
+                border-radius: {theme.RADIUS_MD}px;
+                padding: 7px 14px;
+                font-size: {theme.FONT_SM}px;
                 font-weight: bold;
-            }
-            #glossaryBtn:hover {
-                background-color: #45475a;
-            }
-            #expandBtn {
-                background-color: #313244;
-                color: #cdd6f4;
+                text-align: left;
+            }}
+            #glossaryBtn:hover, #expandBtn:hover {{
+                background-color: {theme.SURFACE_1};
+            }}
+            #expandBtn:checked {{
+                background-color: {theme.SURFACE_1};
+                border-color: {theme.SURFACE_2};
+            }}
+            #translateBtn {{
+                background-color: {theme.BLUE};
+                color: {theme.BG_BASE};
                 border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-size: 12px;
-                font-weight: bold;
-            }
-            #expandBtn:hover {
-                background-color: #45475a;
-            }
-            #expandBtn:checked {
-                background-color: #45475a;
-            }
-            #translateBtn {
-                background-color: #89b4fa;
-                color: #1e1e2e;
-                border: none;
-                border-radius: 6px;
+                border-radius: {theme.RADIUS_MD}px;
                 padding: 8px 24px;
-                font-size: 13px;
+                font-size: {theme.FONT_MD}px;
                 font-weight: bold;
-            }
-            #translateBtn:hover {
-                background-color: #74c7ec;
-            }
-            #translateBtn:pressed {
-                background-color: #94e2d5;
-            }
-            #translateBtn:disabled {
-                background-color: #45475a;
-                color: #6c7086;
-            }
-            #stopBtn {
-                background-color: #f38ba8;
-                color: #1e1e2e;
+                text-align: left;
+            }}
+            #translateBtn:hover {{ background-color: {theme.SAPPHIRE}; }}
+            #translateBtn:pressed {{ background-color: {theme.TEAL}; }}
+            #translateBtn:disabled {{
+                background-color: {theme.SURFACE_1};
+                color: {theme.MUTED};
+            }}
+            #stopBtn {{
+                background-color: {theme.RED};
+                color: {theme.BG_BASE};
                 border: none;
-                border-radius: 6px;
+                border-radius: {theme.RADIUS_MD}px;
                 padding: 8px 24px;
-                font-size: 13px;
+                font-size: {theme.FONT_MD}px;
                 font-weight: bold;
-            }
-            #stopBtn:hover {
-                background-color: #eba0ac;
-            }
-            #cancelBtn {
-                background-color: #45475a;
-                color: #cdd6f4;
+                text-align: left;
+            }}
+            #stopBtn:hover {{ background-color: {theme.MAROON}; }}
+            #cancelBtn {{
+                background-color: {theme.SURFACE_1};
+                color: {theme.TEXT};
                 border: none;
-                border-radius: 6px;
+                border-radius: {theme.RADIUS_MD}px;
                 padding: 8px 24px;
-                font-size: 13px;
+                font-size: {theme.FONT_MD}px;
                 font-weight: bold;
-            }
-            #cancelBtn:hover {
-                background-color: #585b70;
-            }
-            #statusLabel {
-                color: #a6adc8;
-                font-size: 12px;
+            }}
+            #cancelBtn:hover {{ background-color: {theme.SURFACE_2}; }}
+            #statusLabel {{
+                color: {theme.SUBTEXT_0};
+                font-size: {theme.FONT_SM}px;
                 font-style: italic;
                 padding: 4px 0;
-            }
-            QMessageBox {
-                background-color: #e0e0e0;
-            }
-            QMessageBox QLabel {
-                color: #1e1e2e;
-                font-size: 13px;
-            }
-            QMessageBox QPushButton {
-                background-color: #45475a;
-                color: #cdd6f4;
-                min-width: 60px;
-            }
-        """.replace("__ARROW_URL__", arrow_url))
+            }}
+        """)
 
     # --- Slots ---
 
@@ -553,15 +547,18 @@ class TranslateDialog(QDialog):
         expanded = self._expand_btn.isChecked()
         self._expand_area.setVisible(expanded)
         arrow = "▲" if expanded else "▼"
+        label_key = "translate.btn_collapse" if expanded else "translate.btn_expand"
         self._expand_btn.setText(
-            f"{arrow} {self._i18n.t('translate.btn_expand')}"
+            f"{arrow} {self._i18n.t(label_key)}"
         )
+
         # Điều chỉnh kích thước dialog (cộng thêm shadow margin)
         m = self._SHADOW_MARGIN * 2
         if expanded:
-            self.setFixedHeight(640 + m)
+            target_height = max(640 + m, self.minimumSizeHint().height())
+            self.setFixedHeight(target_height)
         else:
-            self.setFixedHeight(520 + m)
+            self.setFixedHeight(640 + m)
 
     def _on_glossary(self) -> None:
         """Mở dialog bảng thuật ngữ."""
@@ -681,14 +678,10 @@ class TranslateDialog(QDialog):
         self._set_processing(False)
 
         if success_count > 0 and fail_count == 0:
-            msg = f"Đã dịch thành công {success_count} file."
-            msg += f"\n\nFile lưu tại:\n{output_dir}"
-            QMessageBox.information(self, "Dịch hoàn tất", msg)
+            msg = f"Đã dịch thành công {success_count} file.\n\nFile lưu tại:\n{output_dir}"
+            MessageDialog.information(self, "Dịch hoàn tất", msg)
         elif success_count > 0 and fail_count > 0:
-            msg = f"Đã dịch thành công {success_count} file."
-            msg += f"\n{fail_count} file thất bại."
-            msg += f"\n\nFile lưu tại:\n{output_dir}"
-            QMessageBox.warning(self, "Dịch hoàn tất", msg)
+            msg = f"Đã dịch thành công {success_count} file.\n{fail_count} file thất bại.\n\nFile lưu tại:\n{output_dir}"
+            MessageDialog.warning(self, "Dịch hoàn tất", msg)
         elif fail_count > 0:
-            msg = f"Dịch thất bại {fail_count} file."
-            QMessageBox.critical(self, "Dịch thất bại", msg)
+            MessageDialog.critical(self, "Dịch thất bại", f"Dịch thất bại {fail_count} file.")

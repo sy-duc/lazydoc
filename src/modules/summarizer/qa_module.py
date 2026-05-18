@@ -4,6 +4,7 @@ import logging
 
 from PySide6.QtCore import QObject, Signal
 
+from src.core.logging_config import sanitize_error
 from src.modules.summarizer.qa_worker import QAWorker
 
 logger = logging.getLogger(__name__)
@@ -87,7 +88,7 @@ class QAModule(QObject):
     def _on_completed(self, success: bool, error_msg: str) -> None:
         self.completed.emit(success, error_msg)
         if not success and error_msg and error_msg != "Đã hủy":
-            logger.error("Q&A thất bại: %s", error_msg)
+            logger.error("Q&A thất bại: %s", sanitize_error(error_msg))
 
     def _cleanup_worker(self) -> None:
         if self._worker:

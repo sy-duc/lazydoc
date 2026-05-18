@@ -3,6 +3,7 @@
 import logging
 from pathlib import Path
 
+from src.core.logging_config import safe_file_label, sanitize_error
 from src.processors.base import ExtractedContent, FileProcessor
 
 logger = logging.getLogger(__name__)
@@ -75,11 +76,11 @@ class PdfProcessor(FileProcessor):
                             pil_image.save(buf, format="PNG")
                             images[f"page{page_idx}_img{img_idx + 1}.png"] = buf.getvalue()
                         except Exception as e:
-                            logger.warning("Không thể extract ảnh trang %d: %s", page_idx, e)
+                            logger.warning("Không thể extract ảnh trang %d: %s", page_idx, sanitize_error(e))
 
         # Nếu không extract được text → có thể là PDF scan
         if not text_content:
-            logger.warning("PDF không có text: %s — có thể là PDF scan (cần OCR).", file_path.name)
+            logger.warning("PDF không có text, có thể là PDF scan: %s", safe_file_label(file_path))
             text_content["main"] = "[PDF scan — cần OCR để trích xuất nội dung]"
 
         content = ExtractedContent(
@@ -98,7 +99,7 @@ class PdfProcessor(FileProcessor):
 
         logger.info(
             "Đã extract file pdf: %s (%d trang, %d bảng, %d ảnh)",
-            file_path.name, total_pages,
+            safe_file_label(file_path), total_pages,
             content.metadata["tables"], content.metadata["images"],
         )
         return content

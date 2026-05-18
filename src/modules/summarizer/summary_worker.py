@@ -8,6 +8,7 @@ from pathlib import Path
 from PySide6.QtCore import QThread, Signal
 
 from src.core.config import ConfigManager
+from src.core.logging_config import safe_file_label, sanitize_error
 from src.processors.base import ExtractedContent
 from src.providers.base import BaseProvider
 from src.providers.token_counter import estimate_tokens
@@ -284,7 +285,7 @@ class SummaryWorker(QThread):
             self.completed.emit(True, "")
 
         except Exception as e:
-            logger.error("Summary worker lỗi: %s", e, exc_info=True)
+            logger.error("Summary worker lỗi: %s", sanitize_error(e), exc_info=True)
             self.completed.emit(False, str(e))
 
     def cancel(self) -> None:
@@ -371,7 +372,7 @@ class SummaryWorker(QThread):
                     self.cost_updated.emit(chunk.input_tokens, chunk.output_tokens)
             return "".join(text_parts)
         except Exception as e:
-            logger.warning("Không thể mô tả hình ảnh: %s", e)
+            logger.warning("Không thể mô tả hình ảnh: %s", sanitize_error(e))
             return "[Không thể mô tả hình ảnh]"
 
     # --- Chunking ---
@@ -531,7 +532,7 @@ class SummaryWorker(QThread):
                 delay = _RETRY_BASE_DELAY * (2 ** attempt)
                 logger.warning(
                     "Summary API lỗi tạm thời (lần %d/%d), thử lại sau %.0fs: %s",
-                    attempt + 1, _MAX_RETRIES, delay, e,
+                    attempt + 1, _MAX_RETRIES, delay, sanitize_error(e),
                 )
                 time.sleep(delay)
         return ""  # không đến được đây
@@ -652,7 +653,7 @@ class SummaryWorker(QThread):
 
         html_content = _md_to_html(report)
         tmp_path.write_text(html_content, encoding="utf-8")
-        logger.info("Đã lưu báo cáo tạm: %s", tmp_path)
+        logger.info("Đã lưu báo cáo tạm: %s", safe_file_label(tmp_path))
         return tmp_path
 
     # --- Utilities ---

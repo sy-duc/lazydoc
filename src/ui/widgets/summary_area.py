@@ -1,6 +1,6 @@
 """SummaryArea — Vùng hiển thị tóm tắt kết quả và Q&A."""
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import Qt, QSize, QTimer, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.i18n import I18nManager
+from src.ui import theme
 
 
 class SummaryArea(QWidget):
@@ -46,7 +47,13 @@ class SummaryArea(QWidget):
 
         # Header với nút Chi tiết
         header = QHBoxLayout()
-        header_label = QLabel("📋 Tóm tắt")
+        header.setSpacing(6)
+
+        icon_label = QLabel()
+        icon_label.setPixmap(theme.pixmap("text-box-outline", color=theme.SUBTEXT_0, size=14))
+        header.addWidget(icon_label)
+
+        header_label = QLabel("Tóm tắt")
         header_label.setObjectName("summaryHeader")
         header.addWidget(header_label)
         header.addStretch()
@@ -76,7 +83,7 @@ class SummaryArea(QWidget):
 
         # Disclaimer hiển thị khi chờ Q&A response
         self._disclaimer_label = QLabel(
-            "💡 Câu trả lời dựa trên báo cáo tổng hợp, không phải tài liệu gốc."
+            "Câu trả lời dựa trên báo cáo tổng hợp, không phải tài liệu gốc."
         )
         self._disclaimer_label.setObjectName("disclaimerLabel")
         self._disclaimer_label.hide()
@@ -87,7 +94,7 @@ class SummaryArea(QWidget):
         qa_row.setSpacing(6)
         self._qa_input = QLineEdit()
         self._qa_input.setObjectName("qaInput")
-        self._qa_input.setPlaceholderText("Hỏi thêm hoặc focus vào chủ đề...")
+        self._qa_input.setPlaceholderText("Hỏi thêm hoặc yêu cầu focus vào chủ đề cần quan tâm...")
         self._qa_input.returnPressed.connect(self._on_send_clicked)
         qa_row.addWidget(self._qa_input)
 
@@ -120,18 +127,18 @@ class SummaryArea(QWidget):
                 color: #cdd6f4;
                 border: 1px solid #45475a;
                 border-radius: 8px;
-                padding: 10px;
+                padding: 12px 14px;
                 font-size: 13px;
-                font-family: monospace;
+                line-height: 1.5;
             }
             #qaText {
                 background-color: #11111b;
                 color: #cdd6f4;
                 border: 1px solid #313244;
                 border-radius: 8px;
-                padding: 10px;
+                padding: 12px 14px;
                 font-size: 13px;
-                font-family: monospace;
+                line-height: 1.5;
             }
             #detailBtn {
                 background-color: #89b4fa;
@@ -249,7 +256,7 @@ class SummaryArea(QWidget):
 
         current = self._qa_area.toPlainText()
         separator = "\n\n" + "─" * 40 + "\n" if current else ""
-        self._qa_area.insertPlainText(f"{separator}❓ {question}\n\n")
+        self._qa_area.insertPlainText(f"{separator}▸ {question}\n\n")
         scrollbar = self._qa_area.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 

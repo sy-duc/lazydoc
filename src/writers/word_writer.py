@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from typing import Callable
 
+from src.core.logging_config import safe_file_label, sanitize_error
 from src.writers.base import FileWriter
 
 logger = logging.getLogger(__name__)
@@ -76,7 +77,7 @@ class WordWriter(FileWriter):
         self._translate_shapes_docx(doc, translate_fn)
 
         doc.save(output_path)
-        logger.info("Đã ghi file docx: %s", output_path.name)
+        logger.info("Đã ghi file docx: %s", safe_file_label(output_path))
 
     def _translate_paragraph(
         self,
@@ -144,7 +145,7 @@ class WordWriter(FileWriter):
                     t_elem.text = translate_fn(t_elem.text)
 
         except Exception as e:
-            logger.debug("Không thể dịch shapes trong docx: %s", e)
+            logger.debug("Không thể dịch shapes trong docx: %s", sanitize_error(e))
 
     def _write_doc(
         self,

@@ -5,6 +5,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from src.core.logging_config import safe_file_label
+
 logger = logging.getLogger(__name__)
 
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets" / "i18n"
@@ -49,7 +51,7 @@ class I18nManager:
 
         file_path = ASSETS_DIR / f"{language}.json"
         if not file_path.exists():
-            logger.warning("File ngôn ngữ không tồn tại: %s", file_path)
+            logger.warning("File ngôn ngữ không tồn tại: %s", safe_file_label(file_path))
             self._translations = {}
             return
 

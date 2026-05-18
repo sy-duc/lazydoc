@@ -7,6 +7,7 @@ from PySide6.QtCore import QObject, Signal
 
 from src.core.database import DatabaseManager
 from src.core.encryption import EncryptionManager
+from src.core.logging_config import sanitize_error
 from src.providers.base import BaseProvider
 from src.providers.claude_provider import ClaudeProvider
 from src.providers.gemini_provider import GeminiProvider
@@ -161,7 +162,7 @@ class ProviderManager(QObject):
 
             return is_valid
         except Exception as e:
-            msg = f"Lỗi validate key {provider_name}: {e}"
+            msg = f"Lỗi validate key {provider_name}: {sanitize_error(e)}"
             logger.error(msg)
             self.validation_result.emit(False, msg)
             return False
@@ -207,7 +208,11 @@ class ProviderManager(QObject):
                         provider_name, self._current_provider.model)
             return True
         except Exception as e:
-            logger.error("Không thể khởi tạo provider '%s': %s", provider_name, e)
+            logger.error(
+                "Không thể khởi tạo provider '%s': %s",
+                provider_name,
+                sanitize_error(e),
+            )
             self._current_provider = None
             self._current_provider_name = provider_name
             return False

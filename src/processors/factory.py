@@ -3,6 +3,7 @@
 import logging
 from pathlib import Path
 
+from src.core.logging_config import safe_file_label
 from src.processors.base import FileProcessor
 
 logger = logging.getLogger(__name__)
@@ -96,7 +97,7 @@ class ProcessorFactory:
                 f"Các định dạng hỗ trợ: {', '.join(supported)}"
             )
 
-        logger.debug("Tạo %s processor cho file: %s", processor_type, path.name)
+        logger.debug("Tạo %s processor cho file: %s", processor_type, safe_file_label(path))
         return cls._create_processor(processor_type)
 
     @classmethod

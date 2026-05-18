@@ -5,6 +5,7 @@ import re
 import time
 from typing import Callable
 
+from src.core.logging_config import sanitize_error
 from src.providers.base import BaseProvider, StreamChunk
 
 logger = logging.getLogger(__name__)
@@ -171,7 +172,12 @@ class AIEngine:
                     batch_idx + 1, len(batches), len(batch),
                 )
             except Exception as e:
-                logger.error("Batch %d/%d thất bại: %s", batch_idx + 1, len(batches), e)
+                logger.error(
+                    "Batch %d/%d thất bại: %s",
+                    batch_idx + 1,
+                    len(batches),
+                    sanitize_error(e),
+                )
                 raise
 
     @staticmethod
@@ -264,7 +270,7 @@ class AIEngine:
                 delay = _RETRY_BASE_DELAY * (2 ** attempt)
                 logger.warning(
                     "API lỗi tạm thời (lần %d/%d), thử lại sau %.0fs: %s",
-                    attempt + 1, _MAX_RETRIES, delay, e,
+                    attempt + 1, _MAX_RETRIES, delay, sanitize_error(e),
                 )
                 time.sleep(delay)
         raise RuntimeError("Không thể hoàn thành sau khi retry.")  # không đến được đây

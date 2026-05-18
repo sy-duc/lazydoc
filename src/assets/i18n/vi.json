@@ -14,6 +14,7 @@
     "btn_stop": "Dừng",
     "col_select": "Chọn",
     "col_filename": "Tên file",
+    "col_format": "Định dạng",
     "col_size": "Kích thước",
     "col_status": "Trạng thái",
     "col_purpose": "Ý nghĩa",
@@ -31,9 +32,11 @@
     "api_key_label": "API Key",
     "btn_save": "Lưu",
     "btn_cancel": "Hủy",
+    "btn_open_logs": "Mở log",
     "validation_empty": "Vui lòng nhập API key.",
     "validating": "Đang kiểm tra...",
     "validation_failed": "API key không hợp lệ. Vui lòng kiểm tra lại.",
+    "open_logs_failed": "Không thể mở thư mục log. Vui lòng kiểm tra quyền truy cập.",
     "save_success": "Đã lưu API key và kết nối thành công."
   },
   "translate": {
@@ -42,6 +45,7 @@
     "target_language": "Ngôn ngữ đích",
     "btn_glossary": "Bảng thuật ngữ",
     "btn_expand": "Mở rộng",
+    "btn_collapse": "Thu gọn",
     "btn_translate": "Dịch",
     "btn_stop": "Dừng",
     "domain": "Lĩnh vực",

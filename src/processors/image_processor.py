@@ -3,6 +3,7 @@
 import logging
 from pathlib import Path
 
+from src.core.logging_config import safe_file_label
 from src.processors.base import ExtractedContent, FileProcessor
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,6 @@ class ImageProcessor(FileProcessor):
 
         logger.info(
             "Đã extract file ảnh: %s (%dx%d, %s)",
-            file_path.name, width, height, img_format,
+            safe_file_label(file_path), width, height, img_format,
         )
         return content

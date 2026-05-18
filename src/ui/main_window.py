@@ -7,19 +7,24 @@ from typing import Any
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent
 from PySide6.QtWidgets import (
+    QFileDialog,
     QHBoxLayout,
-    QMessageBox,
     QVBoxLayout,
     QWidget,
 )
 
 from src.core.i18n import I18nManager
+from src.core.logging_config import safe_file_label, sanitize_error
+from src.ui import theme
+from src.ui.dialogs.message_dialog import MessageDialog
 from src.modules.extract import ExtractModule
 from src.modules.summarizer import SummaryModule, QAModule, _md_to_html
 from src.modules.translator import TranslateModule
 from src.processors.base import ExtractedContent
 from src.processors.factory import ProcessorFactory
 from src.providers.provider_manager import ProviderManager
+from src.ui.dialogs.about_dialog import AboutDialog
+from src.ui.dialogs.guide_dialog import GuideDialog
 from src.ui.dialogs.settings_dialog import SettingsDialog
 from src.ui.dialogs.translate_dialog import TranslateDialog
 from src.ui.widgets.file_table import FileTable
@@ -51,9 +56,9 @@ class MainWindow(QWidget):
         self._i18n = I18nManager()
         self._provider_manager = provider_manager or ProviderManager()
         self._drag_start_pos = None
-        self._extract_results: list[str] = []
         self._grind_files: list[Path] = []
         self._grind_cancelled = False
+        self._pending_summary = False
         self._detail_report_path: str = ""
         self._summary_context: str = ""
         self._qa_history: list[tuple[str, str]] = []
@@ -84,6 +89,7 @@ class MainWindow(QWidget):
         # Thanh tiêu đề tùy chỉnh
         self._title_bar = TitleBar(self)
         self._title_bar.close_clicked.connect(self.close)
+        self._title_bar.minimize_clicked.connect(self.showMinimized)
         main_layout.addWidget(self._title_bar)
 
         # Vùng nội dung chính
@@ -119,42 +125,44 @@ class MainWindow(QWidget):
         self._toolbar.settings_clicked.connect(self._open_settings)
         self._toolbar.summary_clicked.connect(self._on_summary)
         self._toolbar.translate_clicked.connect(self._open_translate)
-        # Click vào máy xay = Extract (đọc file thô)
-        self._blender.body_clicked.connect(self._on_grind)
+        self._toolbar.guide_clicked.connect(self._open_guide)
+        self._toolbar.about_clicked.connect(self._open_about)
+        # Click vào vùng drop = mở file picker
+        self._blender.body_clicked.connect(self._on_open_file_dialog)
         content_layout.addWidget(self._toolbar)
 
         main_layout.addWidget(content, stretch=1)
 
     def _setup_style(self) -> None:
         """Áp dụng stylesheet cho cửa sổ."""
-        self.setStyleSheet("""
-            MainWindow {
-                background-color: #1e1e2e;
-                border: 1px solid #45475a;
+        self.setStyleSheet(f"""
+            MainWindow {{
+                background-color: {theme.BG_BASE};
+                border: 1px solid {theme.SURFACE_1};
                 border-radius: 10px;
-            }
-            #content {
-                background-color: #1e1e2e;
-            }
-            #content QLabel {
-                color: #cdd6f4;
-                font-size: 13px;
-            }
-            QPushButton {
-                background-color: #45475a;
-                color: #cdd6f4;
+            }}
+            #content {{
+                background-color: {theme.BG_BASE};
+            }}
+            #content QLabel {{
+                color: {theme.TEXT};
+                font-size: {theme.FONT_MD}px;
+            }}
+            QPushButton {{
+                background-color: {theme.SURFACE_1};
+                color: {theme.TEXT};
                 border: none;
-                border-radius: 6px;
+                border-radius: {theme.RADIUS_SM}px;
                 padding: 8px 16px;
-                font-size: 13px;
+                font-size: {theme.FONT_MD}px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #585b70;
-            }
-            QPushButton:pressed {
-                background-color: #313244;
-            }
+            }}
+            QPushButton:hover {{
+                background-color: {theme.SURFACE_2};
+            }}
+            QPushButton:pressed {{
+                background-color: {theme.SURFACE_0};
+            }}
         """)
 
     def _setup_provider_connections(self) -> None:
@@ -190,11 +198,10 @@ class MainWindow(QWidget):
         if unsupported:
             supported_list = ", ".join(sorted(SUPPORTED_EXTENSIONS))
             file_list = "\n".join(f"• {n}" for n in unsupported)
-            QMessageBox.warning(
+            MessageDialog.warning(
                 self,
                 "File không hỗ trợ",
-                f"Các file sau không được hỗ trợ:\n{file_list}\n\n"
-                f"Định dạng hỗ trợ: {supported_list}",
+                f"Các file sau không được hỗ trợ:\n{file_list}\n\nĐịnh dạng hỗ trợ: {supported_list}",
             )
 
         if files:
@@ -289,175 +296,125 @@ class MainWindow(QWidget):
         dialog.exec()
         overlay.deleteLater()
 
-    def _on_grind(self) -> None:
-        """Bấm Xay → Extract only (đọc file thô, chưa gọi AI).
+    def _open_guide(self) -> None:
+        """Mở dialog hướng dẫn sử dụng."""
+        overlay = self._create_overlay()
+        GuideDialog(self).exec()
+        overlay.deleteLater()
 
-        Chuyển đổi nội dung file sang dạng trung gian. Sau khi extract xong,
-        người dùng có thể chọn Tổng hợp hoặc Dịch.
-        """
-        checked_files = self._file_table.get_checked_files()
-        if not checked_files:
-            self._summary_area.set_summary(
-                self._i18n.t("main.no_file_selected"),
-                typing_effect=False,
-            )
-            return
+    def _open_about(self) -> None:
+        """Mở dialog thông tin ứng dụng."""
+        overlay = self._create_overlay()
+        provider = self._provider_manager.provider
+        active_name = provider.name if provider else ""
+        AboutDialog(self, active_provider=active_name).exec()
+        overlay.deleteLater()
 
+    def _on_open_file_dialog(self) -> None:
+        """Mở hộp thoại chọn file khi click vào vùng kéo thả."""
         if self._extract_module.is_running or self._summary_module.is_running:
-            logger.warning("Đang xử lý, bỏ qua.")
             return
-
-        # Lưu danh sách file
-        self._grind_files = list(checked_files)
-        self._grind_cancelled = False
-
-        # Chuẩn bị UI
-        self._extract_results.clear()
-        self._blender.set_status("Extracting...")
-        self._toolbar.set_processing(True)
-        self._cost_tracker.set_processing(True)
-        self._summary_area.clear()
-
-        # Cập nhật trạng thái
-        for file_path in checked_files:
-            self._file_table.update_file_status(file_path, "Extracting...")
-
-        # Bắt đầu extract (async trên QThread)
-        self._extract_module.start_extract(checked_files)
+        ext_str = " ".join(f"*{e}" for e in sorted(SUPPORTED_EXTENSIONS))
+        files, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Chọn tài liệu",
+            str(Path.home()),
+            f"Tài liệu hỗ trợ ({ext_str})",
+        )
+        if files:
+            paths = [Path(f) for f in files]
+            self._file_table.add_files(paths, checked=True)
+            self._file_table.setVisible(True)
+            self._blender.play_file_drop()
+            self.files_added.emit(paths)
 
     def _on_summary(self) -> None:
-        """Bấm Tổng hợp → gọi AI tổng hợp thông tin (yêu cầu đã extract).
-
-        Kiểm tra file đã được extract chưa. Nếu chưa → thông báo.
-        Nếu rồi → gọi AI Provider tổng hợp.
-        """
+        """Bấm Tổng hợp → tự động extract (nếu cần) rồi gọi AI tổng hợp."""
         checked_files = self._file_table.get_checked_files()
         if not checked_files:
-            QMessageBox.warning(
+            MessageDialog.warning(
                 self, "Chưa chọn file",
                 "Chưa có file nào được chọn. Hãy tick chọn file trong bảng.",
             )
             return
 
-        # Kiểm tra file đã extract chưa
-        uncached = [
-            f for f in checked_files
-            if self._extract_module.get_cached(f) is None
-        ]
-        if uncached:
-            file_lines = "\n".join(f"  • {f.name}" for f in uncached)
-            QMessageBox.warning(
-                self,
-                "Chưa extract",
-                f"Các file sau chưa được extract:\n{file_lines}\n\n"
-                "Hãy click vào máy xay để extract trước.",
-            )
-            return
-
-        # Kiểm tra provider
         if not self._provider_manager.provider:
-            QMessageBox.warning(
+            MessageDialog.warning(
                 self, "Chưa cấu hình AI",
                 "Chưa cấu hình AI Provider. Vào Cài đặt để thêm API key.",
             )
             return
 
-        if self._summary_module.is_running:
-            logger.warning("Tổng hợp đang chạy, bỏ qua.")
+        if self._extract_module.is_running or self._summary_module.is_running:
             return
 
-        # Thu thập nội dung đã extract
         self._grind_files = list(checked_files)
         self._grind_cancelled = False
         self._detail_report_path = ""
         self._summary_context = ""
-        contents: dict[Path, ExtractedContent] = {}
-        for f in checked_files:
-            cached = self._extract_module.get_cached(f)
-            if cached:
-                contents[f] = cached
-
-        # Reset Q&A session
         self._qa_history = []
         self._qa_current_answer = ""
 
-        # Chuẩn bị UI
-        self._blender.set_status("Analysing...")
+        self._blender.set_status("Đang xử lý...")
         self._toolbar.set_processing(True)
         self._cost_tracker.set_processing(True)
         self._summary_area.clear()
         self._provider_manager.token_counter.reset()
 
-        # Bắt đầu tổng hợp
-        self._summary_module.start_summary(contents)
+        for f in checked_files:
+            self._file_table.update_file_status(f, "processing")
+
+        # Nếu còn file chưa extract → extract trước, sau đó tự động summary
+        uncached = [f for f in checked_files if self._extract_module.get_cached(f) is None]
+        if uncached:
+            self._pending_summary = True
+            self._extract_module.start_extract(checked_files)
+        else:
+            self._pending_summary = False
+            contents: dict[Path, ExtractedContent] = {
+                f: self._extract_module.get_cached(f)
+                for f in checked_files
+            }
+            self._summary_module.start_summary(contents)
 
     def _on_extract_file_started(self, file_path: Path) -> None:
         """Cập nhật UI khi bắt đầu extract một file."""
-        self._file_table.update_file_status(file_path, "Extracting...")
+        self._file_table.update_file_status(file_path, "processing")
 
     def _on_extract_file_completed(
         self, file_path: Path, content: ExtractedContent
     ) -> None:
-        """Cập nhật UI khi extract một file thành công."""
-        self._file_table.update_file_status(file_path, "Đã extract")
-
-        # Chuẩn bị text tóm tắt cho file này
-        parts: list[str] = []
-
-        full_text = content.get_full_text()
-        if full_text:
-            preview = full_text[:200] + "..." if len(full_text) > 200 else full_text
-            parts.append(preview)
-
-        if content.shapes_text:
-            total_shapes = sum(len(v) for v in content.shapes_text.values())
-            parts.append(f"[Shapes ({total_shapes})]")
-            for section, texts in content.shapes_text.items():
-                for t in texts[:3]:
-                    parts.append(f"  [{section}] {t[:80]}")
-
-        if content.images:
-            keys_preview = ", ".join(list(content.images.keys())[:3])
-            parts.append(f"[Images: {len(content.images)} file(s): {keys_preview}]")
-
-        self._extract_results.append(
-            f"--- {content.file_name} ---\n" + "\n".join(parts)
-        )
+        """Extract một file thành công — giữ trạng thái processing cho đến khi summary xong."""
 
     def _on_extract_file_failed(self, file_path: Path, error_msg: str) -> None:
         """Cập nhật UI khi extract một file thất bại."""
-        self._file_table.update_file_status(file_path, "Lỗi extract")
-        self._extract_results.append(
-            f"--- {file_path.name} ---\n[LỖI] {error_msg}"
-        )
-        logger.error("Extract thất bại: %s — %s", file_path.name, error_msg)
+        self._file_table.update_file_status(file_path, "error")
+        logger.error("Extract thất bại: %s - %s", safe_file_label(file_path), sanitize_error(error_msg))
 
     def _on_extract_completed(self, success_count: int, fail_count: int) -> None:
-        """Cập nhật UI khi toàn bộ extract hoàn tất.
-
-        Hiển thị thông báo kết quả và hướng dẫn bước tiếp theo.
-        """
+        """Toàn bộ extract hoàn tất — tự động bắt đầu summary nếu đang pending."""
         if self._grind_cancelled:
+            self._reset_processing_ui()
             return
 
-        self._reset_processing_ui()
-        self._blender.play_done()
+        if self._pending_summary:
+            self._pending_summary = False
+            contents: dict[Path, ExtractedContent] = {}
+            for f in self._grind_files:
+                cached = self._extract_module.get_cached(f)
+                if cached:
+                    contents[f] = cached
 
-        # Thông báo kết quả extract
-        if success_count == 0:
-            msg = f"Extract thất bại toàn bộ {fail_count} file."
-            self._summary_area.set_summary(msg, typing_effect=False)
-            return
+            if not contents:
+                self._reset_processing_ui()
+                for f in self._grind_files:
+                    self._file_table.update_file_status(f, "error")
+                self._summary_area.set_summary(
+                    "Extract thất bại. Không thể tổng hợp.", typing_effect=False
+                )
+                return
 
-        # Liệt kê từng file đã extract
-        file_lines = "\n".join(
-            f"  • {f.name}" for f in self._grind_files
-            if self._extract_module.get_cached(f) is not None
-        )
-        msg = f"Đã extract {success_count} file:\n{file_lines}"
-        if fail_count > 0:
-            msg += f"\n({fail_count} file lỗi)"
-        self._summary_area.set_summary(msg, typing_effect=False)
+            self._summary_module.start_summary(contents)
 
     def _on_file_removed(self, path: Path) -> None:
         """Ẩn bảng file khi không còn file nào."""
@@ -519,7 +476,7 @@ class MainWindow(QWidget):
         """Lưu đường dẫn file HTML chi tiết và hiển thị nút 'Chi tiết'."""
         self._detail_report_path = report_path
         self._summary_area.show_detail_button()
-        logger.info("Báo cáo chi tiết đã sẵn sàng: %s", report_path)
+        logger.info("Báo cáo chi tiết đã sẵn sàng: %s", safe_file_label(report_path))
 
     def _on_summary_completed(self, success: bool, error_msg: str) -> None:
         """Xử lý khi tổng hợp hoàn tất hoặc thất bại."""
@@ -529,13 +486,15 @@ class MainWindow(QWidget):
             self._summary_area.set_summary(
                 f"[LỖI] {error_msg}", typing_effect=False,
             )
-            logger.error("Tổng hợp thất bại: %s", error_msg)
+            for f in self._grind_files:
+                self._file_table.update_file_status(f, "error")
+            logger.error("Tổng hợp thất bại: %s", sanitize_error(error_msg))
         else:
             self._blender.play_done()
             if success:
                 for f in self._grind_files:
-                    self._file_table.update_file_status(f, "Đã summary")
-                # Hiển thị Q&A input sau khi tổng hợp thành công
+                    status = "done" if self._extract_module.get_cached(f) else "error"
+                    self._file_table.update_file_status(f, status)
                 self._summary_area.show_qa_input()
 
     def _on_detail_clicked(self) -> None:
@@ -565,9 +524,9 @@ class MainWindow(QWidget):
             qa_history=self._qa_history or None,
         )
         dest_path.write_text(html_content, encoding="utf-8")
-        logger.info("Đã tải báo cáo về: %s", dest_path)
+        logger.info("Đã tải báo cáo về: %s", safe_file_label(dest_path))
 
-        QMessageBox.information(
+        MessageDialog.information(
             self,
             "Đã tải về",
             f"File báo cáo đã được lưu tại:\n{dest_path}",
@@ -612,7 +571,7 @@ class MainWindow(QWidget):
             self._qa_current_answer = ""
         elif not success and error_msg and error_msg != "Đã hủy":
             self._summary_area.append_text(f"\n[Lỗi Q&A: {error_msg}]")
-            logger.error("Q&A thất bại: %s", error_msg)
+            logger.error("Q&A thất bại: %s", sanitize_error(error_msg))
 
     def _reset_processing_ui(self) -> None:
         """Reset trạng thái UI về chế độ bình thường (không đang xử lý)."""
@@ -624,14 +583,14 @@ class MainWindow(QWidget):
         """Mở dialog dịch thuật với các file đã checked."""
         checked_files = self._file_table.get_checked_files()
         if not checked_files:
-            QMessageBox.warning(
+            MessageDialog.warning(
                 self, "Chưa chọn file",
                 "Chưa có file nào được chọn. Hãy tick chọn file trong bảng.",
             )
             return
 
         overlay = self._create_overlay()
-        dialog = TranslateDialog(checked_files, self)
+        dialog = TranslateDialog(checked_files, self)  # type: ignore[arg-type]
 
         # Kết nối Dialog → TranslateModule, kèm summary context nếu đã có
         context = self._summary_context.strip() or None
@@ -664,9 +623,9 @@ class MainWindow(QWidget):
     def _on_translate_error(self, dialog: TranslateDialog, msg: str) -> None:
         """Xử lý lỗi từ TranslateModule — reset dialog và hiển thị lỗi."""
         dialog.on_translate_done()
-        QMessageBox.critical(dialog, "Lỗi dịch thuật", msg)
+        MessageDialog.critical(dialog, "Lỗi dịch thuật", msg)
         self._summary_area.set_summary(f"[LỖI] {msg}", typing_effect=False)
-        logger.error("Lỗi dịch thuật: %s", msg)
+        logger.error("Lỗi dịch thuật: %s", sanitize_error(msg))
 
     # --- Public API ---
 

@@ -3,25 +3,30 @@
 import logging
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QComboBox,
     QDialog,
     QFileDialog,
     QGraphicsDropShadowEffect,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QPushButton,
-    QScrollArea,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
 from src.core.i18n import I18nManager
+from src.core.logging_config import sanitize_error
 from src.modules.glossary.glossary_manager import GlossaryManager
+from src.ui import theme
+from src.ui.dialogs.message_dialog import MessageDialog
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +36,11 @@ LANGUAGES = [
     ("en", "English"),
     ("ja", "日本語"),
 ]
+
+# Thứ tự cột trong bảng
+COL_TERM_FROM = 0
+COL_TERM_TO = 1
+COL_ACTIONS = 2
 
 
 class GlossaryDialog(QDialog):
@@ -54,11 +64,13 @@ class GlossaryDialog(QDialog):
     def _setup_window(self) -> None:
         """Cấu hình dialog."""
         self.setWindowTitle(self._i18n.t("glossary.title"))
-        self.setFixedSize(560, 560)
+        self.setMinimumSize(560, 560)
+        self.resize(600, 640)
         self.setWindowFlags(
             Qt.WindowType.Dialog
             | Qt.WindowType.FramelessWindowHint
         )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setModal(True)
 
     def _setup_ui(self) -> None:
@@ -85,122 +97,144 @@ class GlossaryDialog(QDialog):
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title_label)
 
-        # Chọn ngôn ngữ nguồn
-        lang_from_row = QHBoxLayout()
-        lang_from_row.setSpacing(10)
+        # --- Cặp ngôn ngữ (nằm ngang) ---
+        lang_row = QHBoxLayout()
+        lang_row.setSpacing(12)
+
         lang_from_lbl = QLabel(self._i18n.t("glossary.lang_from"))
-        lang_from_lbl.setFixedWidth(110)
+        lang_from_lbl.setObjectName("sectionLabel")
+        lang_row.addWidget(lang_from_lbl)
+
         self._lang_from_combo = QComboBox()
         self._lang_from_combo.setObjectName("langCombo")
         self._lang_from_combo.setCursor(Qt.CursorShape.PointingHandCursor)
         for code, name in LANGUAGES:
             self._lang_from_combo.addItem(name, code)
         self._lang_from_combo.currentIndexChanged.connect(self._load_entries)
-        lang_from_row.addWidget(lang_from_lbl)
-        lang_from_row.addWidget(self._lang_from_combo, stretch=1)
-        layout.addLayout(lang_from_row)
+        lang_row.addWidget(self._lang_from_combo, stretch=1)
 
-        # Chọn ngôn ngữ đích
-        lang_to_row = QHBoxLayout()
-        lang_to_row.setSpacing(10)
-        lang_to_lbl = QLabel(self._i18n.t("glossary.lang_to"))
-        lang_to_lbl.setFixedWidth(110)
+        arrow_lbl = QLabel("→")
+        arrow_lbl.setObjectName("arrowLabel")
+        lang_row.addWidget(arrow_lbl)
+
         self._lang_to_combo = QComboBox()
         self._lang_to_combo.setObjectName("langCombo")
         self._lang_to_combo.setCursor(Qt.CursorShape.PointingHandCursor)
         for code, name in LANGUAGES:
             self._lang_to_combo.addItem(name, code)
-        # Mặc định chọn ngôn ngữ đích khác ngôn ngữ nguồn
         self._lang_to_combo.setCurrentIndex(1)
         self._lang_to_combo.currentIndexChanged.connect(self._load_entries)
-        lang_to_row.addWidget(lang_to_lbl)
-        lang_to_row.addWidget(self._lang_to_combo, stretch=1)
-        layout.addLayout(lang_to_row)
+        lang_row.addWidget(self._lang_to_combo, stretch=1)
 
-        # Nhập thuật ngữ gốc
+        layout.addLayout(lang_row)
+
+        # --- Separator ---
+        sep = QWidget()
+        sep.setObjectName("separator")
+        sep.setFixedHeight(1)
+        layout.addWidget(sep)
+
+        # --- Form thêm/sửa thuật ngữ ---
+        form_label = QLabel("Thêm / Sửa thuật ngữ")
+        form_label.setObjectName("sectionLabel")
+        layout.addWidget(form_label)
+
         term_from_row = QHBoxLayout()
         term_from_row.setSpacing(10)
         term_from_lbl = QLabel(self._i18n.t("glossary.term_from"))
-        term_from_lbl.setFixedWidth(110)
+        term_from_lbl.setFixedWidth(100)
         self._term_from_input = QLineEdit()
         self._term_from_input.setObjectName("termInput")
-        self._term_from_input.setPlaceholderText(
-            self._i18n.t("glossary.term_from_hint")
-        )
+        self._term_from_input.setPlaceholderText(self._i18n.t("glossary.term_from_hint"))
         term_from_row.addWidget(term_from_lbl)
         term_from_row.addWidget(self._term_from_input, stretch=1)
         layout.addLayout(term_from_row)
 
-        # Nhập thuật ngữ đích
         term_to_row = QHBoxLayout()
         term_to_row.setSpacing(10)
         term_to_lbl = QLabel(self._i18n.t("glossary.term_to"))
-        term_to_lbl.setFixedWidth(110)
+        term_to_lbl.setFixedWidth(100)
         self._term_to_input = QLineEdit()
         self._term_to_input.setObjectName("termInput")
-        self._term_to_input.setPlaceholderText(
-            self._i18n.t("glossary.term_to_hint")
-        )
+        self._term_to_input.setPlaceholderText(self._i18n.t("glossary.term_to_hint"))
         term_to_row.addWidget(term_to_lbl)
         term_to_row.addWidget(self._term_to_input, stretch=1)
         layout.addLayout(term_to_row)
 
-        # Nút Lưu
         save_row = QHBoxLayout()
-        save_row.setSpacing(10)
         save_row.addStretch()
 
-        self._save_btn = QPushButton(
-            f"{self._i18n.t('glossary.btn_save')}"
-        )
+        self._cancel_edit_btn = QPushButton("Hủy sửa")
+        self._cancel_edit_btn.setObjectName("cancelEditBtn")
+        self._cancel_edit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._cancel_edit_btn.clicked.connect(self._on_cancel_edit)
+        self._cancel_edit_btn.hide()
+        save_row.addWidget(self._cancel_edit_btn)
+
+        self._save_btn = QPushButton(self._i18n.t("glossary.btn_save"))
         self._save_btn.setObjectName("saveBtn")
+        self._save_btn.setIcon(theme.icon("content-save-outline", color=theme.BG_BASE))
+        self._save_btn.setIconSize(QSize(14, 14))
         self._save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._save_btn.clicked.connect(self._on_save)
         save_row.addWidget(self._save_btn)
 
         layout.addLayout(save_row)
 
-        # Ô tìm kiếm
+        # --- Separator ---
+        sep2 = QWidget()
+        sep2.setObjectName("separator")
+        sep2.setFixedHeight(1)
+        layout.addWidget(sep2)
+
+        # --- Tìm kiếm ---
         self._search_input = QLineEdit()
         self._search_input.setObjectName("searchInput")
-        self._search_input.setPlaceholderText(
-            self._i18n.t("glossary.search")
-        )
+        self._search_input.setPlaceholderText(self._i18n.t("glossary.search"))
         self._search_input.textChanged.connect(self._load_entries)
         layout.addWidget(self._search_input)
 
-        # Danh sách thuật ngữ
-        self._scroll = QScrollArea()
-        self._scroll.setObjectName("entryScroll")
-        self._scroll.setWidgetResizable(True)
-        self._scroll.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
+        # --- Bảng thuật ngữ ---
+        self._table = QTableWidget(0, 3)
+        self._table.setObjectName("glossaryTable")
+        self._table.setHorizontalHeaderLabels([
+            self._i18n.t("glossary.term_from"),
+            self._i18n.t("glossary.term_to"),
+            "",
+        ])
 
-        self._entry_container = QWidget()
-        self._entry_layout = QVBoxLayout(self._entry_container)
-        self._entry_layout.setContentsMargins(4, 4, 4, 4)
-        self._entry_layout.setSpacing(4)
-        self._entry_layout.addStretch()
-        self._scroll.setWidget(self._entry_container)
-        layout.addWidget(self._scroll, stretch=1)
+        header = self._table.horizontalHeader()
+        header.setSectionResizeMode(COL_TERM_FROM, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(COL_TERM_TO, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(COL_ACTIONS, QHeaderView.ResizeMode.Fixed)
+        self._table.setColumnWidth(COL_ACTIONS, 72)
 
-        # Hàng nút dưới: Import CSV + Export CSV + Đóng
+        self._table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setShowGrid(False)
+        self._table.setAlternatingRowColors(True)
+        self._table.setSortingEnabled(True)
+
+        layout.addWidget(self._table, stretch=1)
+
+        # --- Nút dưới: Import / Export / Đóng ---
         btn_row = QHBoxLayout()
-        btn_row.setSpacing(10)
+        btn_row.setSpacing(8)
 
-        self._import_btn = QPushButton(
-            f"{self._i18n.t('glossary.btn_import')}"
-        )
+        self._import_btn = QPushButton(self._i18n.t("glossary.btn_import"))
         self._import_btn.setObjectName("importBtn")
+        self._import_btn.setIcon(theme.icon("upload-outline", color=theme.SUBTEXT_0))
+        self._import_btn.setIconSize(QSize(14, 14))
         self._import_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._import_btn.clicked.connect(self._on_import)
         btn_row.addWidget(self._import_btn)
 
-        self._export_btn = QPushButton(
-            f"{self._i18n.t('glossary.btn_export')}"
-        )
+        self._export_btn = QPushButton(self._i18n.t("glossary.btn_export"))
         self._export_btn.setObjectName("exportBtn")
+        self._export_btn.setIcon(theme.icon("download-outline", color=theme.SUBTEXT_0))
+        self._export_btn.setIconSize(QSize(14, 14))
         self._export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._export_btn.clicked.connect(self._on_export)
         btn_row.addWidget(self._export_btn)
@@ -219,147 +253,146 @@ class GlossaryDialog(QDialog):
         """Áp dụng stylesheet cho dialog."""
         arrow_icon = Path(__file__).resolve().parent.parent.parent / "assets" / "icons" / "dropdown_arrow.svg"
         arrow_url = arrow_icon.as_posix()
-        self.setStyleSheet("""
-            GlossaryDialog {
-                background-color: #11111b;
-            }
-            #panel {
+        self.setStyleSheet(f"""
+            GlossaryDialog {{
+                background-color: transparent;
+            }}
+            #panel {{
                 background-color: #262640;
-                border: 1px solid #585b70;
-                border-radius: 10px;
-            }
-            #dialogTitle {
-                color: #cdd6f4;
-                font-size: 16px;
+                border: 1px solid {theme.SURFACE_2};
+                border-radius: {theme.RADIUS_LG}px;
+            }}
+            #dialogTitle {{
+                color: {theme.TEXT};
+                font-size: {theme.FONT_LG}px;
                 font-weight: bold;
-            }
-            QLabel {
-                color: #cdd6f4;
-                font-size: 13px;
-            }
-            #langCombo {
-                background-color: #313244;
-                color: #cdd6f4;
-                border: 1px solid #45475a;
-                border-radius: 6px;
-                padding: 6px 10px;
-                font-size: 13px;
-            }
-            #langCombo::drop-down {
-                border: none;
-                width: 24px;
-            }
-            #langCombo::down-arrow {
-                image: url(__ARROW_URL__);
-                width: 10px;
-                height: 6px;
-                margin-right: 8px;
-            }
-            #langCombo QAbstractItemView {
-                background-color: #313244;
-                color: #cdd6f4;
-                border: 1px solid #45475a;
-                selection-background-color: #45475a;
+            }}
+            #sectionLabel {{
+                color: {theme.SUBTEXT_0};
+                font-size: {theme.FONT_SM}px;
+                font-weight: bold;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }}
+            #arrowLabel {{
+                color: {theme.SUBTEXT_0};
+                font-size: {theme.FONT_MD}px;
+            }}
+            #separator {{
+                background-color: {theme.SURFACE_0};
+            }}
+            QLabel {{
+                color: {theme.TEXT};
+                font-size: {theme.FONT_MD}px;
+            }}
+            #langCombo {{
+                background-color: {theme.SURFACE_0};
+                color: {theme.TEXT};
+                border: 1px solid {theme.SURFACE_1};
+                border-radius: {theme.RADIUS_MD}px;
+                padding: 5px 10px;
+                font-size: {theme.FONT_MD}px;
+            }}
+            #langCombo::drop-down {{ border: none; width: 24px; }}
+            #langCombo::down-arrow {{
+                image: url({arrow_url});
+                width: 10px; height: 6px; margin-right: 8px;
+            }}
+            #langCombo QAbstractItemView {{
+                background-color: {theme.SURFACE_0};
+                color: {theme.TEXT};
+                border: 1px solid {theme.SURFACE_1};
+                selection-background-color: {theme.SURFACE_1};
                 outline: none;
-            }
-            #termInput, #searchInput {
-                background-color: #313244;
-                color: #cdd6f4;
-                border: 1px solid #45475a;
-                border-radius: 6px;
+            }}
+            #termInput, #searchInput {{
+                background-color: {theme.SURFACE_0};
+                color: {theme.TEXT};
+                border: 1px solid {theme.SURFACE_1};
+                border-radius: {theme.RADIUS_MD}px;
                 padding: 6px 10px;
-                font-size: 13px;
-            }
-            #termInput:focus, #searchInput:focus {
-                border: 1px solid #89b4fa;
-            }
-            #entryScroll {
-                background-color: #181825;
-                border: 1px solid #313244;
-                border-radius: 6px;
-            }
-            #entryScroll QWidget {
-                background-color: #181825;
-            }
-            #entryRow {
-                background-color: transparent;
-            }
-            #entryText {
-                color: #cdd6f4;
-                font-size: 12px;
-            }
-            #editBtn {
-                background-color: transparent;
-                color: #89b4fa;
+                font-size: {theme.FONT_MD}px;
+            }}
+            #termInput:focus, #searchInput:focus {{
+                border-color: {theme.BLUE};
+            }}
+            #glossaryTable {{
+                background-color: {theme.BG_MANTLE};
+                alternate-background-color: {theme.BG_BASE};
+                color: {theme.TEXT};
+                border: 1px solid {theme.SURFACE_1};
+                border-radius: {theme.RADIUS_MD}px;
+                gridline-color: transparent;
+                font-size: {theme.FONT_MD}px;
+            }}
+            #glossaryTable::item {{
+                padding: 4px 10px;
+                border-bottom: 1px solid {theme.SURFACE_0};
+            }}
+            #glossaryTable::item:selected {{
+                background-color: {theme.SURFACE_0};
+                color: {theme.TEXT};
+            }}
+            #glossaryTable QHeaderView::section {{
+                background-color: {theme.SURFACE_0};
+                color: {theme.SUBTEXT_0};
                 border: none;
-                font-size: 14px;
-                padding: 2px 6px;
-            }
-            #editBtn:hover {
-                color: #74c7ec;
-            }
-            #deleteBtn {
-                background-color: transparent;
-                color: #f38ba8;
-                border: none;
-                font-size: 14px;
-                padding: 2px 6px;
-            }
-            #deleteBtn:hover {
-                color: #eba0ac;
-            }
-            #saveBtn {
-                background-color: #a6e3a1;
-                color: #1e1e2e;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 24px;
-                font-size: 13px;
+                padding: 6px 10px;
+                font-size: {theme.FONT_SM}px;
                 font-weight: bold;
-            }
-            #saveBtn:hover {
-                background-color: #94e2d5;
-            }
-            #saveBtn:pressed {
-                background-color: #74c7ec;
-            }
-            #importBtn, #exportBtn {
-                background-color: #313244;
-                color: #cdd6f4;
+            }}
+            #editBtn {{
+                background-color: transparent;
                 border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-size: 12px;
-                font-weight: bold;
-            }
-            #importBtn:hover, #exportBtn:hover {
-                background-color: #45475a;
-            }
-            #cancelBtn {
-                background-color: #45475a;
-                color: #cdd6f4;
+                border-radius: {theme.RADIUS_SM}px;
+                padding: 4px;
+                min-width: 28px; max-width: 28px;
+                min-height: 28px; max-height: 28px;
+            }}
+            #editBtn:hover {{ background-color: {theme.SURFACE_0}; }}
+            #deleteBtn {{
+                background-color: transparent;
                 border: none;
-                border-radius: 6px;
-                padding: 8px 24px;
-                font-size: 13px;
+                border-radius: {theme.RADIUS_SM}px;
+                padding: 4px;
+                min-width: 28px; max-width: 28px;
+                min-height: 28px; max-height: 28px;
+            }}
+            #deleteBtn:hover {{ background-color: {theme.SURFACE_0}; }}
+            {theme.btn_success_qss("saveBtn")}
+            #cancelEditBtn {{
+                background-color: transparent;
+                color: {theme.SUBTEXT_0};
+                border: 1px solid {theme.SURFACE_1};
+                border-radius: {theme.RADIUS_MD}px;
+                padding: 7px 16px;
+                font-size: {theme.FONT_MD}px;
+            }}
+            #cancelEditBtn:hover {{ background-color: {theme.SURFACE_0}; color: {theme.TEXT}; }}
+            #importBtn, #exportBtn {{
+                background-color: {theme.SURFACE_0};
+                color: {theme.TEXT};
+                border: 1px solid {theme.SURFACE_1};
+                border-radius: {theme.RADIUS_MD}px;
+                padding: 7px 14px;
+                font-size: {theme.FONT_SM}px;
                 font-weight: bold;
-            }
-            #cancelBtn:hover {
-                background-color: #585b70;
-            }
-            QMessageBox {
-                background-color: #e0e0e0;
-            }
-            QMessageBox QLabel {
-                color: #1e1e2e;
-                font-size: 13px;
-            }
-            QMessageBox QPushButton {
-                background-color: #45475a;
-                color: #cdd6f4;
-                min-width: 60px;
-            }
-        """.replace("__ARROW_URL__", arrow_url))
+                text-align: left;
+            }}
+            #importBtn:hover, #exportBtn:hover {{
+                background-color: {theme.SURFACE_1};
+            }}
+            #cancelBtn {{
+                background-color: {theme.SURFACE_1};
+                color: {theme.TEXT};
+                border: none;
+                border-radius: {theme.RADIUS_MD}px;
+                padding: 7px 24px;
+                font-size: {theme.FONT_MD}px;
+                font-weight: bold;
+            }}
+            #cancelBtn:hover {{ background-color: {theme.SURFACE_2}; }}
+        """)
 
     # --- Helpers ---
 
@@ -371,62 +404,64 @@ class GlossaryDialog(QDialog):
         """Trả về mã ngôn ngữ đích đang chọn."""
         return self._lang_to_combo.currentData()
 
-    def _clear_entries(self) -> None:
-        """Xóa toàn bộ entry trong danh sách hiển thị."""
-        while self._entry_layout.count() > 1:
-            item = self._entry_layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.deleteLater()
-
-    def _add_entry_row(self, entry_id: int, term_from: str, term_to: str) -> None:
-        """Thêm một hàng thuật ngữ vào danh sách.
+    def _add_table_row(self, entry_id: int, term_from: str, term_to: str) -> None:
+        """Thêm một hàng vào bảng thuật ngữ.
 
         Args:
             entry_id: ID bản ghi trong database.
             term_from: Thuật ngữ gốc.
             term_to: Thuật ngữ đích.
         """
-        row = QWidget()
-        row.setObjectName("entryRow")
-        row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(4, 2, 4, 2)
-        row_layout.setSpacing(8)
+        # Tắm sorting khi chèn để tránh index lộn xộn
+        self._table.setSortingEnabled(False)
 
-        text_label = QLabel(f"{term_from}  →  {term_to}")
-        text_label.setObjectName("entryText")
-        row_layout.addWidget(text_label, stretch=1)
+        row = self._table.rowCount()
+        self._table.insertRow(row)
 
-        edit_btn = QPushButton("✏")
+        from_item = QTableWidgetItem(term_from)
+        from_item.setData(Qt.ItemDataRole.UserRole, entry_id)
+        self._table.setItem(row, COL_TERM_FROM, from_item)
+
+        to_item = QTableWidgetItem(term_to)
+        self._table.setItem(row, COL_TERM_TO, to_item)
+
+        # Widget chứa 2 nút action
+        action_widget = QWidget()
+        action_layout = QHBoxLayout(action_widget)
+        action_layout.setContentsMargins(4, 0, 4, 0)
+        action_layout.setSpacing(2)
+        action_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        edit_btn = QPushButton()
         edit_btn.setObjectName("editBtn")
-        edit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        edit_btn.setIcon(theme.icon("pencil-outline", color=theme.BLUE))
+        edit_btn.setIconSize(QSize(14, 14))
         edit_btn.setToolTip(self._i18n.t("glossary.tooltip_edit"))
+        edit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         edit_btn.clicked.connect(
-            lambda _, eid=entry_id, tf=term_from, tt=term_to: self._on_edit(
-                eid, tf, tt
-            )
+            lambda _, eid=entry_id, tf=term_from, tt=term_to: self._on_edit(eid, tf, tt)
         )
-        row_layout.addWidget(edit_btn)
+        action_layout.addWidget(edit_btn)
 
-        del_btn = QPushButton("✕")
+        del_btn = QPushButton()
         del_btn.setObjectName("deleteBtn")
-        del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        del_btn.setIcon(theme.icon("delete-outline", color=theme.RED))
+        del_btn.setIconSize(QSize(14, 14))
         del_btn.setToolTip(self._i18n.t("glossary.tooltip_delete"))
-        del_btn.clicked.connect(
-            lambda _, eid=entry_id: self._on_delete(eid)
-        )
-        row_layout.addWidget(del_btn)
+        del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        del_btn.clicked.connect(lambda _, eid=entry_id: self._on_delete(eid))
+        action_layout.addWidget(del_btn)
 
-        # Chèn trước stretch
-        self._entry_layout.insertWidget(
-            self._entry_layout.count() - 1, row
-        )
+        self._table.setCellWidget(row, COL_ACTIONS, action_widget)
+        self._table.setRowHeight(row, 40)
+
+        self._table.setSortingEnabled(True)
 
     # --- Data ---
 
     def _load_entries(self) -> None:
         """Tải danh sách thuật ngữ theo cặp ngôn ngữ và bộ lọc tìm kiếm."""
-        self._clear_entries()
+        self._table.setRowCount(0)
 
         lang_from = self._current_lang_from()
         lang_to = self._current_lang_to()
@@ -434,9 +469,17 @@ class GlossaryDialog(QDialog):
 
         entries = self._glossary.search(lang_from, lang_to, search)
         for entry in entries:
-            self._add_entry_row(entry["id"], entry["term_from"], entry["term_to"])
+            self._add_table_row(entry["id"], entry["term_from"], entry["term_to"])
 
     # --- Slots ---
+
+    def _on_cancel_edit(self) -> None:
+        """Hủy chế độ sửa, reset form về trạng thái thêm mới."""
+        self._editing_id = None
+        self._term_from_input.clear()
+        self._term_to_input.clear()
+        self._cancel_edit_btn.hide()
+        self._save_btn.setText(self._i18n.t("glossary.btn_save"))
 
     def _on_save(self) -> None:
         """Lưu thuật ngữ mới hoặc cập nhật thuật ngữ đang sửa."""
@@ -444,7 +487,7 @@ class GlossaryDialog(QDialog):
         term_to = self._term_to_input.text().strip()
 
         if not term_from or not term_to:
-            QMessageBox.warning(
+            MessageDialog.warning(
                 self,
                 self._i18n.t("glossary.title"),
                 self._i18n.t("glossary.validation_empty"),
@@ -455,7 +498,7 @@ class GlossaryDialog(QDialog):
         lang_to = self._current_lang_to()
 
         if lang_from == lang_to:
-            QMessageBox.warning(
+            MessageDialog.warning(
                 self,
                 self._i18n.t("glossary.title"),
                 self._i18n.t("glossary.validation_same_lang"),
@@ -471,16 +514,13 @@ class GlossaryDialog(QDialog):
             else:
                 self._glossary.add(lang_from, term_from, lang_to, term_to)
         except ValueError as e:
-            QMessageBox.warning(
-                self,
-                self._i18n.t("glossary.title"),
-                str(e),
-            )
+            MessageDialog.warning(self, self._i18n.t("glossary.title"), str(e))
             return
 
-        # Reset form
         self._term_from_input.clear()
         self._term_to_input.clear()
+        self._cancel_edit_btn.hide()
+        self._save_btn.setText(self._i18n.t("glossary.btn_save"))
         self._term_from_input.setFocus()
         self._load_entries()
 
@@ -495,6 +535,8 @@ class GlossaryDialog(QDialog):
         self._editing_id = entry_id
         self._term_from_input.setText(term_from)
         self._term_to_input.setText(term_to)
+        self._cancel_edit_btn.show()
+        self._save_btn.setText("Cập nhật")
         self._term_from_input.setFocus()
 
     def _on_delete(self, entry_id: int) -> None:
@@ -503,20 +545,14 @@ class GlossaryDialog(QDialog):
         Args:
             entry_id: ID bản ghi cần xóa.
         """
-        reply = QMessageBox.question(
+        if MessageDialog.question(
             self,
             self._i18n.t("glossary.title"),
             self._i18n.t("glossary.confirm_delete"),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if reply == QMessageBox.StandardButton.Yes:
+        ):
             self._glossary.delete(entry_id)
-            # Nếu đang sửa entry này thì reset form
             if self._editing_id == entry_id:
-                self._editing_id = None
-                self._term_from_input.clear()
-                self._term_to_input.clear()
+                self._on_cancel_edit()
             self._load_entries()
 
     def _on_import(self) -> None:
@@ -532,24 +568,14 @@ class GlossaryDialog(QDialog):
 
         try:
             count = self._glossary.import_csv(file_path)
-        except (FileNotFoundError, ValueError) as e:
-            logger.error("Lỗi import CSV: %s", e)
-            QMessageBox.warning(
-                self,
-                self._i18n.t("glossary.title"),
-                self._i18n.t("glossary.import_error"),
-            )
-            return
         except Exception as e:
-            logger.error("Lỗi import CSV: %s", e)
-            QMessageBox.warning(
-                self,
-                self._i18n.t("glossary.title"),
-                self._i18n.t("glossary.import_error"),
+            logger.error("Lỗi import CSV: %s", sanitize_error(e))
+            MessageDialog.warning(
+                self, self._i18n.t("glossary.title"), self._i18n.t("glossary.import_error")
             )
             return
 
-        QMessageBox.information(
+        MessageDialog.information(
             self,
             self._i18n.t("glossary.title"),
             self._i18n.t("glossary.import_success").replace("{count}", str(count)),
@@ -570,15 +596,13 @@ class GlossaryDialog(QDialog):
         try:
             count = self._glossary.export_csv(file_path)
         except Exception as e:
-            logger.error("Lỗi export CSV: %s", e)
-            QMessageBox.warning(
-                self,
-                self._i18n.t("glossary.title"),
-                self._i18n.t("glossary.export_error"),
+            logger.error("Lỗi export CSV: %s", sanitize_error(e))
+            MessageDialog.warning(
+                self, self._i18n.t("glossary.title"), self._i18n.t("glossary.export_error")
             )
             return
 
-        QMessageBox.information(
+        MessageDialog.information(
             self,
             self._i18n.t("glossary.title"),
             self._i18n.t("glossary.export_success").replace("{count}", str(count)),

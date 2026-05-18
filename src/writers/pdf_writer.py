@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from typing import Callable
 
+from src.core.logging_config import safe_file_label
 from src.writers.base import FileWriter
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,6 @@ class PdfWriter(FileWriter):
         actual_output = output_path.with_suffix(".txt")
         actual_output.write_text("\n\n".join(translated_parts), encoding="utf-8")
         logger.info(
-            "Đã ghi file pdf → txt: %s (%d trang)",
-            actual_output.name, len(translated_parts),
+            "Đã ghi file pdf -> txt: %s (%d phần)",
+            safe_file_label(actual_output), len(translated_parts),
         )
