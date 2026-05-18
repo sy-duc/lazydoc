@@ -44,6 +44,7 @@
     "target_language": "Target language",
     "btn_glossary": "Glossary",
     "btn_expand": "Advanced",
+    "btn_collapse": "Collapse",
     "btn_translate": "Translate",
     "btn_stop": "Stop",
     "domain": "Domain",

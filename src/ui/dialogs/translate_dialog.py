@@ -348,8 +348,6 @@ class TranslateDialog(QDialog):
 
         layout.addWidget(self._expand_area)
 
-        layout.addStretch()
-
         # Label trạng thái vui nhộn (thay thế progress bar)
         self._status_label = QLabel("Đang dịch...")
         self._status_label.setObjectName("statusLabel")
@@ -546,15 +544,17 @@ class TranslateDialog(QDialog):
         expanded = self._expand_btn.isChecked()
         self._expand_area.setVisible(expanded)
         arrow = "▲" if expanded else "▼"
+        label_key = "translate.btn_collapse" if expanded else "translate.btn_expand"
         self._expand_btn.setText(
-            f"{arrow} {self._i18n.t('translate.btn_expand')}"
+            f"{arrow} {self._i18n.t(label_key)}"
         )
 
-        # Resize theo sizeHint thực tế của layout. Không hard-code chiều cao,
-        # vì Windows/Qt có thể tính minimum geometry lớn hơn khi radio options wrap.
+        # Resize vừa đủ nội dung. Collapsed trả về chiều cao ban đầu; expanded
+        # lấy sizeHint thực tế để tránh warning geometry trên Windows.
         if self.layout():
             self.layout().activate()
-        target_height = max(self.minimumHeight(), self.sizeHint().height())
+        m = self._SHADOW_MARGIN * 2
+        target_height = max(self.minimumHeight(), self.sizeHint().height()) if expanded else 520 + m
         self.setFixedHeight(target_height)
 
     def _on_glossary(self) -> None:

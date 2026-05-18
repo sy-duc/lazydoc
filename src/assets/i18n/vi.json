@@ -44,6 +44,7 @@
     "target_language": "Ngôn ngữ đích",
     "btn_glossary": "Bảng thuật ngữ",
     "btn_expand": "Mở rộng",
+    "btn_collapse": "Thu gọn",
     "btn_translate": "Dịch",
     "btn_stop": "Dừng",
     "domain": "Lĩnh vực",
