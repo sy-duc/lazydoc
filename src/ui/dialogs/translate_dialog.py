@@ -199,7 +199,7 @@ class TranslateDialog(QDialog):
         file_scroll = QScrollArea()
         file_scroll.setObjectName("fileScroll")
         file_scroll.setWidgetResizable(True)
-        file_scroll.setMaximumHeight(100)
+        file_scroll.setMaximumHeight(65)
         file_scroll.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
@@ -554,7 +554,8 @@ class TranslateDialog(QDialog):
         # Điều chỉnh kích thước dialog (cộng thêm shadow margin)
         m = self._SHADOW_MARGIN * 2
         if expanded:
-            self.setFixedHeight(640 + m)
+            target_height = max(640 + m, self.minimumSizeHint().height())
+            self.setFixedHeight(target_height)
         else:
             self.setFixedHeight(520 + m)
 
