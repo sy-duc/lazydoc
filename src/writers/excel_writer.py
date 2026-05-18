@@ -7,6 +7,7 @@ import zipfile
 from pathlib import Path
 from typing import Callable
 
+from src.core.logging_config import safe_file_label
 from src.writers.base import FileWriter
 
 logger = logging.getLogger(__name__)
@@ -114,7 +115,7 @@ class ExcelWriter(FileWriter):
                         modified_files[name] = translated_drawing
 
         self._replace_in_zip(output_path, modified_files)
-        logger.info("Đã ghi file xlsx (ZIP mode): %s", output_path.name)
+        logger.info("Đã ghi file xlsx (ZIP mode): %s", safe_file_label(output_path))
 
     @staticmethod
     def _translate_shared_strings_regex(
@@ -298,7 +299,7 @@ class ExcelWriter(FileWriter):
 
         wb.save(output_path)
         wb.close()
-        logger.info("Đã ghi file xlsx (openpyxl mode): %s", output_path.name)
+        logger.info("Đã ghi file xlsx (openpyxl mode): %s", safe_file_label(output_path))
 
     # --- Nhánh xls (legacy) ---
 
@@ -345,4 +346,4 @@ class ExcelWriter(FileWriter):
         actual_output = output_path.with_suffix(".xlsx")
         wb.save(actual_output)
         wb.close()
-        logger.info("Đã ghi file xls → xlsx: %s", actual_output.name)
+        logger.info("Đã ghi file xls -> xlsx: %s", safe_file_label(actual_output))

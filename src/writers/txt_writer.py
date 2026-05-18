@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from typing import Callable
 
+from src.core.logging_config import safe_file_label
 from src.writers.base import FileWriter
 
 logger = logging.getLogger(__name__)
@@ -48,4 +49,4 @@ class TxtWriter(FileWriter):
                 translated_parts.append(para)
 
         output_path.write_text("\n\n".join(translated_parts), encoding="utf-8")
-        logger.info("Đã ghi file txt: %s", output_path.name)
+        logger.info("Đã ghi file txt: %s", safe_file_label(output_path))

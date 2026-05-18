@@ -4,8 +4,8 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QColor, QIcon
+from PySide6.QtCore import Qt, QSize, QUrl
+from PySide6.QtGui import QColor, QIcon, QDesktopServices
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -24,6 +24,7 @@ from src.ui.dialogs.message_dialog import MessageDialog
 from src.core.database import DatabaseManager
 from src.core.encryption import EncryptionManager
 from src.core.i18n import I18nManager
+from src.core.logging_config import get_log_dir, sanitize_error
 from src.providers.provider_manager import ProviderManager
 
 logger = logging.getLogger(__name__)
@@ -131,6 +132,13 @@ class SettingsDialog(QDialog):
         # Buttons
         btn_row = QHBoxLayout()
         btn_row.setSpacing(10)
+
+        self._open_log_btn = QPushButton(self._i18n.t("settings.btn_open_logs"))
+        self._open_log_btn.setObjectName("openLogBtn")
+        self._open_log_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._open_log_btn.clicked.connect(self._on_open_logs)
+        btn_row.addWidget(self._open_log_btn)
+
         btn_row.addStretch()
 
         self._cancel_btn = QPushButton(self._i18n.t("settings.btn_cancel"))
@@ -224,7 +232,7 @@ class SettingsDialog(QDialog):
             #saveBtn:pressed {
                 background-color: #74c7ec;
             }
-            #cancelBtn {
+            #openLogBtn, #cancelBtn {
                 background-color: #45475a;
                 color: #cdd6f4;
                 border: none;
@@ -233,7 +241,7 @@ class SettingsDialog(QDialog):
                 font-size: 13px;
                 font-weight: bold;
             }
-            #cancelBtn:hover {
+            #openLogBtn:hover, #cancelBtn:hover {
                 background-color: #585b70;
             }
         """.replace("__ARROW_URL__", arrow_url))
@@ -287,6 +295,22 @@ class SettingsDialog(QDialog):
 
         # Xóa input để người dùng nhập key mới (nếu muốn)
         self._key_input.clear()
+
+    def _on_open_logs(self) -> None:
+        """Mở thư mục log chẩn đoán của ứng dụng."""
+        try:
+            log_dir = get_log_dir()
+            opened = QDesktopServices.openUrl(QUrl.fromLocalFile(str(log_dir)))
+            if not opened:
+                raise RuntimeError(f"Không thể mở thư mục log: {log_dir}")
+            logger.info("Đã mở thư mục log.")
+        except Exception as e:
+            logger.error("Không thể mở thư mục log: %s", sanitize_error(e))
+            MessageDialog.warning(
+                self,
+                self._i18n.t("settings.title"),
+                self._i18n.t("settings.open_logs_failed"),
+            )
 
     def _on_save(self) -> None:
         """Xử lý khi người dùng bấm nút Lưu.

@@ -6,6 +6,8 @@ import sqlite3
 from pathlib import Path
 from typing import Callable
 
+from src.core.logging_config import safe_file_label
+
 logger = logging.getLogger(__name__)
 
 # Patch sqlite3.connect để cho phép sử dụng cross-thread.
@@ -126,10 +128,10 @@ class ArgosEngine:
 
         model_path = _BUNDLED_MODELS_DIR / filename
         if not model_path.is_file():
-            logger.warning("File model bundled không tồn tại: %s", model_path)
+            logger.warning("File model bundled không tồn tại: %s", safe_file_label(model_path))
             return False
 
-        logger.info("Cài model từ file bundled: %s", model_path.name)
+        logger.info("Cài model từ file bundled: %s", safe_file_label(model_path))
         argostranslate.package.install_from_path(model_path)
         logger.info("Đã cài model bundled: %s → %s", src, tgt)
         return True

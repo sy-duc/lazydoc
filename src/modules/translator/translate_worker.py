@@ -7,6 +7,7 @@ from typing import Callable
 
 from PySide6.QtCore import QThread, Signal
 
+from src.core.logging_config import safe_file_label, sanitize_error
 from src.modules.translator.argos_engine import ArgosEngine
 
 logger = logging.getLogger(__name__)
@@ -230,13 +231,21 @@ class TranslateWorker(QThread):
                 self.file_completed.emit(file_path, actual_output)
                 output_files.append(actual_output)
                 success_count += 1
-                logger.info("Dịch thành công: %s → %s", file_path.name, actual_output.name)
+                logger.info(
+                    "Dịch thành công: input=(%s), output=(%s)",
+                    safe_file_label(file_path),
+                    safe_file_label(actual_output),
+                )
 
             except Exception as e:
                 error_msg = self._format_error(e)
                 self.file_failed.emit(file_path, error_msg)
                 fail_count += 1
-                logger.error("Dịch thất bại: %s — %s", file_path.name, e)
+                logger.error(
+                    "Dịch thất bại: %s - %s",
+                    safe_file_label(file_path),
+                    sanitize_error(e),
+                )
 
             percent = int((idx + 1) / total * 100)
             self.progress_updated.emit(percent)
@@ -269,13 +278,21 @@ class TranslateWorker(QThread):
                 self.file_completed.emit(file_path, actual_output)
                 output_files.append(actual_output)
                 success_count += 1
-                logger.info("Dịch thành công: %s → %s", file_path.name, actual_output.name)
+                logger.info(
+                    "Dịch thành công: input=(%s), output=(%s)",
+                    safe_file_label(file_path),
+                    safe_file_label(actual_output),
+                )
 
             except Exception as e:
                 error_msg = self._format_error(e)
                 self.file_failed.emit(file_path, error_msg)
                 fail_count += 1
-                logger.error("Dịch thất bại: %s — %s", file_path.name, e)
+                logger.error(
+                    "Dịch thất bại: %s - %s",
+                    safe_file_label(file_path),
+                    sanitize_error(e),
+                )
 
             percent = int((idx + 1) / total * 100)
             self.progress_updated.emit(percent)

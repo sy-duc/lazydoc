@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from src.core.database import DatabaseManager
+from src.core.logging_config import safe_file_label
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ class GlossaryManager:
                 (lang_from, term_from, lang_to, term_to, now, now),
             )
             self._conn.commit()
-            logger.info("Đã thêm thuật ngữ: %s → %s", term_from, term_to)
+            logger.info("Đã thêm thuật ngữ glossary: %s -> %s", lang_from, lang_to)
             return cursor.lastrowid
         except Exception:
             # UNIQUE constraint — cập nhật bản ghi cũ
@@ -77,7 +78,7 @@ class GlossaryManager:
                 "SELECT id FROM glossary WHERE lang_from = ? AND term_from = ? AND lang_to = ?",
                 (lang_from, term_from, lang_to),
             ).fetchone()
-            logger.info("Đã cập nhật thuật ngữ trùng: %s → %s", term_from, term_to)
+            logger.info("Đã cập nhật thuật ngữ trùng: %s -> %s", lang_from, lang_to)
             return row["id"]
 
     def update(
@@ -111,7 +112,7 @@ class GlossaryManager:
             (term_from, term_to, lang_from, lang_to, now, entry_id),
         )
         self._conn.commit()
-        logger.info("Đã cập nhật thuật ngữ id=%d: %s → %s", entry_id, term_from, term_to)
+        logger.info("Đã cập nhật thuật ngữ id=%d: %s -> %s", entry_id, lang_from, lang_to)
 
     def delete(self, entry_id: int) -> None:
         """Xóa thuật ngữ theo ID.
@@ -309,7 +310,7 @@ class GlossaryManager:
                 )
                 count += 1
         self._conn.commit()
-        logger.info("Import thành công %d thuật ngữ từ %s.", count, file_path)
+        logger.info("Import thành công %d thuật ngữ từ %s.", count, safe_file_label(file_path))
         return count
 
     def export_csv(self, file_path: str | Path) -> int:
@@ -340,7 +341,7 @@ class GlossaryManager:
                 ])
                 count += 1
 
-        logger.info("Export thành công %d thuật ngữ ra %s.", count, file_path)
+        logger.info("Export thành công %d thuật ngữ ra %s.", count, safe_file_label(file_path))
         return count
 
     # --- Validation ---

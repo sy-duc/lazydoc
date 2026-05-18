@@ -6,6 +6,7 @@ from collections.abc import Generator
 
 import anthropic
 
+from src.core.logging_config import sanitize_error
 from src.providers.base import BaseProvider, StreamChunk
 
 logger = logging.getLogger(__name__)
@@ -92,7 +93,7 @@ class ClaudeProvider(BaseProvider):
                 logger.info("Claude models available: %s", models)
                 return ClaudeProvider._cached_models
         except Exception as e:
-            logger.warning("Không thể lấy danh sách model Claude: %s. Dùng fallback.", e)
+            logger.warning("Không thể lấy danh sách model Claude: %s. Dùng fallback.", sanitize_error(e))
 
         ClaudeProvider._cached_models = list(self._FALLBACK_MODELS)
         return ClaudeProvider._cached_models
@@ -174,7 +175,7 @@ class ClaudeProvider(BaseProvider):
                 output_tokens=output_tokens,
             )
         except Exception as e:
-            logger.error("Claude describe_image lỗi: %s", e)
+            logger.error("Claude describe_image lỗi: %s", sanitize_error(e))
             raise
 
     def validate_key(self) -> bool:
@@ -189,7 +190,7 @@ class ClaudeProvider(BaseProvider):
             logger.warning("Claude API key không hợp lệ.")
             return False
         except Exception as e:
-            logger.error("Claude validate_key lỗi: %s", e)
+            logger.error("Claude validate_key lỗi: %s", sanitize_error(e))
             return False
 
     def _stream_messages(
@@ -228,5 +229,5 @@ class ClaudeProvider(BaseProvider):
                 output_tokens=output_tokens,
             )
         except Exception as e:
-            logger.error("Claude streaming lỗi: %s", e)
+            logger.error("Claude streaming lỗi: %s", sanitize_error(e))
             raise

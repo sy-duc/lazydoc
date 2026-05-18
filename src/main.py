@@ -10,18 +10,14 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from PySide6.QtWidgets import QApplication
 
+from src.core.logging_config import configure_logging
 from src.core.database import DatabaseManager
 from src.core.config import ConfigManager
 from src.core.i18n import I18nManager
 from src.providers.provider_manager import ProviderManager
 from src.ui.main_window import MainWindow
 
-# Cấu hình logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+configure_logging()
 logger = logging.getLogger("lazydoc")
 
 

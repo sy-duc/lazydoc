@@ -7,6 +7,8 @@ from pathlib import Path
 
 from platformdirs import user_data_dir
 
+from src.core.logging_config import safe_file_label
+
 logger = logging.getLogger(__name__)
 
 APP_NAME = "LazyDoc"
@@ -63,7 +65,7 @@ class DatabaseManager:
 
     def initialize(self) -> None:
         """Khởi tạo database: tạo bảng và chạy migration nếu cần."""
-        logger.info("Đang khởi tạo database tại: %s", self._db_path)
+        logger.info("Đang khởi tạo database tại: %s", safe_file_label(self._db_path))
         self._create_schema_version_table()
 
         current_version = self._get_schema_version()

@@ -3,6 +3,7 @@
 import logging
 from pathlib import Path
 
+from src.core.logging_config import safe_file_label, sanitize_error
 from src.processors.base import ExtractedContent, FileProcessor
 
 logger = logging.getLogger(__name__)
@@ -99,7 +100,7 @@ class PowerPointProcessor(FileProcessor):
                         image_name = f"slide{slide_idx}_{shape.shape_id}.{ext}"
                         images[image_name] = image_data
                     except Exception as e:
-                        logger.warning("Không thể đọc ảnh slide %d: %s", slide_idx, e)
+                        logger.warning("Không thể đọc ảnh slide %d: %s", slide_idx, sanitize_error(e))
 
             # Speaker notes
             if slide.has_notes_slide and slide.notes_slide.notes_text_frame:
@@ -133,7 +134,7 @@ class PowerPointProcessor(FileProcessor):
 
         logger.info(
             "Đã extract file pptx: %s (%d slide, %d shapes, %d ảnh)",
-            file_path.name, len(prs.slides), total_shapes, len(images),
+            safe_file_label(file_path), len(prs.slides), total_shapes, len(images),
         )
         return content
 

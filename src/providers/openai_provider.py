@@ -6,6 +6,7 @@ from collections.abc import Generator
 
 from openai import AuthenticationError, OpenAI
 
+from src.core.logging_config import sanitize_error
 from src.providers.base import BaseProvider, StreamChunk
 
 logger = logging.getLogger(__name__)
@@ -90,7 +91,7 @@ class OpenAIProvider(BaseProvider):
                 logger.info("OpenAI models available: %s", models)
                 return OpenAIProvider._cached_models
         except Exception as e:
-            logger.warning("Không thể lấy danh sách model OpenAI: %s. Dùng fallback.", e)
+            logger.warning("Không thể lấy danh sách model OpenAI: %s. Dùng fallback.", sanitize_error(e))
 
         OpenAIProvider._cached_models = list(self._FALLBACK_MODELS)
         return OpenAIProvider._cached_models
@@ -164,7 +165,7 @@ class OpenAIProvider(BaseProvider):
                         output_tokens=chunk.usage.completion_tokens,
                     )
         except Exception as e:
-            logger.error("OpenAI describe_image lỗi: %s", e)
+            logger.error("OpenAI describe_image lỗi: %s", sanitize_error(e))
             raise
 
     def validate_key(self) -> bool:
@@ -176,7 +177,7 @@ class OpenAIProvider(BaseProvider):
             logger.warning("OpenAI API key không hợp lệ.")
             return False
         except Exception as e:
-            logger.error("OpenAI validate_key lỗi: %s", e)
+            logger.error("OpenAI validate_key lỗi: %s", sanitize_error(e))
             return False
 
     def _stream_chat(
@@ -216,5 +217,5 @@ class OpenAIProvider(BaseProvider):
                         output_tokens=chunk.usage.completion_tokens,
                     )
         except Exception as e:
-            logger.error("OpenAI streaming lỗi: %s", e)
+            logger.error("OpenAI streaming lỗi: %s", sanitize_error(e))
             raise

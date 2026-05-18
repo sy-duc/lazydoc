@@ -31,9 +31,11 @@
     "api_key_label": "API Key",
     "btn_save": "Lưu",
     "btn_cancel": "Hủy",
+    "btn_open_logs": "Mở log",
     "validation_empty": "Vui lòng nhập API key.",
     "validating": "Đang kiểm tra...",
     "validation_failed": "API key không hợp lệ. Vui lòng kiểm tra lại.",
+    "open_logs_failed": "Không thể mở thư mục log. Vui lòng kiểm tra quyền truy cập.",
     "save_success": "Đã lưu API key và kết nối thành công."
   },
   "translate": {

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
+from src.core.logging_config import sanitize_error
 from src.modules.summarizer.summary_worker import SummaryWorker
 from src.processors.base import ExtractedContent
 
@@ -148,7 +149,7 @@ class SummaryModule(QObject):
         if success:
             logger.info("Tổng hợp hoàn tất thành công.")
         elif error_msg:
-            logger.error("Tổng hợp thất bại: %s", error_msg)
+            logger.error("Tổng hợp thất bại: %s", sanitize_error(error_msg))
 
     def _cleanup_worker(self) -> None:
         """Dọn dẹp worker sau khi kết thúc."""

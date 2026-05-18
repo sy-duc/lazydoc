@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from typing import Callable
 
+from src.core.logging_config import safe_file_label
 from src.writers.base import FileWriter
 
 logger = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ class PowerPointWriter(FileWriter):
                 )
 
         prs.save(output_path)
-        logger.info("Đã ghi file pptx: %s", output_path.name)
+        logger.info("Đã ghi file pptx: %s", safe_file_label(output_path))
 
     def _iter_shapes(self, shapes: "pptx.shapes.shapetree.SlideShapes"):
         """Duyệt tất cả shapes bao gồm group shapes (đệ quy).

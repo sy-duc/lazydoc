@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from src.core.logging_config import safe_file_label
 from src.core.i18n import I18nManager
 from src.ui import theme
 
@@ -204,7 +205,7 @@ class FileTable(QWidget):
         """
         for path in paths:
             if path in self._file_paths:
-                logger.info("File đã tồn tại trong bảng: %s", path.name)
+                logger.info("File đã tồn tại trong bảng: %s", safe_file_label(path))
                 continue
             self._file_paths.append(path)
             self._add_row(path, checked=checked)
@@ -272,7 +273,7 @@ class FileTable(QWidget):
             self.file_removed.emit(path)
             # Cập nhật lại connect cho các nút xóa
             self._reconnect_delete_buttons()
-            logger.info("Đã xóa file: %s", path.name)
+            logger.info("Đã xóa file khỏi bảng: %s", safe_file_label(path))
 
     def _reconnect_delete_buttons(self) -> None:
         """Cập nhật lại callback cho các nút xóa sau khi xóa hàng."""

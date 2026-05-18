@@ -3,6 +3,7 @@
 import logging
 from pathlib import Path
 
+from src.core.logging_config import safe_file_label, sanitize_error
 from src.processors.base import ExtractedContent, FileProcessor
 
 logger = logging.getLogger(__name__)
@@ -68,7 +69,7 @@ class WordProcessor(FileProcessor):
                     image_name = Path(rel.target_ref).name
                     images[image_name] = image_data
                 except Exception as e:
-                    logger.warning("Không thể đọc hình ảnh %s: %s", rel_id, e)
+                    logger.warning("Không thể đọc hình ảnh trong docx: rel_id=%s, error=%s", rel_id, sanitize_error(e))
 
         # Extract shapes/textbox text bằng XML parsing
         shapes_text_list = extract_shapes_from_docx(file_path)
@@ -93,7 +94,7 @@ class WordProcessor(FileProcessor):
 
         logger.info(
             "Đã extract file docx: %s (%d đoạn, %d bảng, %d ảnh, %d shapes)",
-            file_path.name, len(doc.paragraphs), len(doc.tables),
+            safe_file_label(file_path), len(doc.paragraphs), len(doc.tables),
             len(images), len(shapes_text_list),
         )
         return content

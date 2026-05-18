@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.i18n import I18nManager
+from src.core.logging_config import sanitize_error
 from src.modules.glossary.glossary_manager import GlossaryManager
 from src.ui import theme
 from src.ui.dialogs.message_dialog import MessageDialog
@@ -567,7 +568,7 @@ class GlossaryDialog(QDialog):
         try:
             count = self._glossary.import_csv(file_path)
         except Exception as e:
-            logger.error("Lỗi import CSV: %s", e)
+            logger.error("Lỗi import CSV: %s", sanitize_error(e))
             MessageDialog.warning(
                 self, self._i18n.t("glossary.title"), self._i18n.t("glossary.import_error")
             )
@@ -594,7 +595,7 @@ class GlossaryDialog(QDialog):
         try:
             count = self._glossary.export_csv(file_path)
         except Exception as e:
-            logger.error("Lỗi export CSV: %s", e)
+            logger.error("Lỗi export CSV: %s", sanitize_error(e))
             MessageDialog.warning(
                 self, self._i18n.t("glossary.title"), self._i18n.t("glossary.export_error")
             )

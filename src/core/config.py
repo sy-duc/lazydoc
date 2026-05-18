@@ -6,6 +6,8 @@ from typing import Any
 
 import yaml
 
+from src.core.logging_config import safe_file_label
+
 logger = logging.getLogger(__name__)
 
 # Đường dẫn mặc định đến file config
@@ -40,13 +42,13 @@ class ConfigManager:
     def _load(self) -> None:
         """Đọc file config.yaml vào memory."""
         if not self._config_path.exists():
-            logger.warning("File config không tồn tại: %s", self._config_path)
+            logger.warning("File config không tồn tại: %s", safe_file_label(self._config_path))
             self._data = {}
             return
 
         with open(self._config_path, "r", encoding="utf-8") as f:
             self._data = yaml.safe_load(f) or {}
-        logger.info("Đã load config từ: %s", self._config_path)
+        logger.info("Đã load config từ: %s", safe_file_label(self._config_path))
 
     def get(self, key: str, default: Any = None) -> Any:
         """Lấy giá trị config theo key (hỗ trợ dot notation).
@@ -89,7 +91,7 @@ class ConfigManager:
         """Ghi config hiện tại ra file yaml."""
         with open(self._config_path, "w", encoding="utf-8") as f:
             yaml.dump(self._data, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
-        logger.info("Đã lưu config vào: %s", self._config_path)
+        logger.info("Đã lưu config vào: %s", safe_file_label(self._config_path))
 
     @property
     def data(self) -> dict[str, Any]:

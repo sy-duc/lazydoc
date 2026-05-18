@@ -4,6 +4,7 @@ import csv
 import logging
 from pathlib import Path
 
+from src.core.logging_config import safe_file_label
 from src.processors.base import ExtractedContent, FileProcessor
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,6 @@ class CsvProcessor(FileProcessor):
 
         logger.info(
             "Đã extract file csv: %s (%d hàng, %d cột)",
-            file_path.name, content.metadata["rows"], content.metadata["columns"],
+            safe_file_label(file_path), content.metadata["rows"], content.metadata["columns"],
         )
         return content

@@ -10,6 +10,8 @@ import zipfile
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+from src.core.logging_config import safe_file_label, sanitize_error
+
 logger = logging.getLogger(__name__)
 
 # Namespace XML thường dùng trong file Office
@@ -95,9 +97,9 @@ def extract_shapes_from_xlsx(file_path: Path) -> dict[str, list[str]]:
                     )
 
     except zipfile.BadZipFile:
-        logger.warning("File không phải ZIP hợp lệ: %s", file_path.name)
+        logger.warning("File không phải ZIP hợp lệ: %s", safe_file_label(file_path))
     except Exception as e:
-        logger.warning("Lỗi khi parse shapes XML từ %s: %s", file_path.name, e)
+        logger.warning("Lỗi khi parse shapes XML từ %s: %s", safe_file_label(file_path), sanitize_error(e))
 
     return shapes_by_drawing
 
@@ -122,9 +124,9 @@ def extract_images_from_xlsx(file_path: Path) -> dict[str, bytes]:
                     image_name = Path(name).name
                     images[image_name] = zf.read(name)
     except zipfile.BadZipFile:
-        logger.warning("File không phải ZIP hợp lệ: %s", file_path.name)
+        logger.warning("File không phải ZIP hợp lệ: %s", safe_file_label(file_path))
     except Exception as e:
-        logger.warning("Lỗi khi extract images từ %s: %s", file_path.name, e)
+        logger.warning("Lỗi khi extract images từ %s: %s", safe_file_label(file_path), sanitize_error(e))
 
     return images
 
@@ -165,7 +167,7 @@ def map_drawings_to_sheets(file_path: Path) -> dict[str, str]:
                         drawing_to_sheet[drawing_name] = sheet_name
 
     except Exception as e:
-        logger.warning("Lỗi khi mapping drawings → sheets: %s", e)
+        logger.warning("Lỗi khi mapping drawings -> sheets: %s", sanitize_error(e))
 
     return drawing_to_sheet
 
@@ -216,8 +218,8 @@ def extract_shapes_from_docx(file_path: Path) -> list[str]:
                         shape_texts.append(text)
 
     except zipfile.BadZipFile:
-        logger.warning("File không phải ZIP hợp lệ: %s", file_path.name)
+        logger.warning("File không phải ZIP hợp lệ: %s", safe_file_label(file_path))
     except Exception as e:
-        logger.warning("Lỗi khi parse shapes từ docx %s: %s", file_path.name, e)
+        logger.warning("Lỗi khi parse shapes từ docx %s: %s", safe_file_label(file_path), sanitize_error(e))
 
     return shape_texts

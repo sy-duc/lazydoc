@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.i18n import I18nManager
+from src.core.logging_config import safe_file_label, sanitize_error
 from src.ui import theme
 from src.ui.dialogs.message_dialog import MessageDialog
 from src.modules.extract import ExtractModule
@@ -388,7 +389,7 @@ class MainWindow(QWidget):
     def _on_extract_file_failed(self, file_path: Path, error_msg: str) -> None:
         """Cập nhật UI khi extract một file thất bại."""
         self._file_table.update_file_status(file_path, "error")
-        logger.error("Extract thất bại: %s — %s", file_path.name, error_msg)
+        logger.error("Extract thất bại: %s - %s", safe_file_label(file_path), sanitize_error(error_msg))
 
     def _on_extract_completed(self, success_count: int, fail_count: int) -> None:
         """Toàn bộ extract hoàn tất — tự động bắt đầu summary nếu đang pending."""
@@ -475,7 +476,7 @@ class MainWindow(QWidget):
         """Lưu đường dẫn file HTML chi tiết và hiển thị nút 'Chi tiết'."""
         self._detail_report_path = report_path
         self._summary_area.show_detail_button()
-        logger.info("Báo cáo chi tiết đã sẵn sàng: %s", report_path)
+        logger.info("Báo cáo chi tiết đã sẵn sàng: %s", safe_file_label(report_path))
 
     def _on_summary_completed(self, success: bool, error_msg: str) -> None:
         """Xử lý khi tổng hợp hoàn tất hoặc thất bại."""
@@ -487,7 +488,7 @@ class MainWindow(QWidget):
             )
             for f in self._grind_files:
                 self._file_table.update_file_status(f, "error")
-            logger.error("Tổng hợp thất bại: %s", error_msg)
+            logger.error("Tổng hợp thất bại: %s", sanitize_error(error_msg))
         else:
             self._blender.play_done()
             if success:
@@ -523,7 +524,7 @@ class MainWindow(QWidget):
             qa_history=self._qa_history or None,
         )
         dest_path.write_text(html_content, encoding="utf-8")
-        logger.info("Đã tải báo cáo về: %s", dest_path)
+        logger.info("Đã tải báo cáo về: %s", safe_file_label(dest_path))
 
         MessageDialog.information(
             self,
@@ -570,7 +571,7 @@ class MainWindow(QWidget):
             self._qa_current_answer = ""
         elif not success and error_msg and error_msg != "Đã hủy":
             self._summary_area.append_text(f"\n[Lỗi Q&A: {error_msg}]")
-            logger.error("Q&A thất bại: %s", error_msg)
+            logger.error("Q&A thất bại: %s", sanitize_error(error_msg))
 
     def _reset_processing_ui(self) -> None:
         """Reset trạng thái UI về chế độ bình thường (không đang xử lý)."""
@@ -624,7 +625,7 @@ class MainWindow(QWidget):
         dialog.on_translate_done()
         MessageDialog.critical(dialog, "Lỗi dịch thuật", msg)
         self._summary_area.set_summary(f"[LỖI] {msg}", typing_effect=False)
-        logger.error("Lỗi dịch thuật: %s", msg)
+        logger.error("Lỗi dịch thuật: %s", sanitize_error(msg))
 
     # --- Public API ---
 
