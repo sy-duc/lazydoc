@@ -141,6 +141,25 @@ class BaseProvider(ABC):
         ...
 
     @abstractmethod
+    def describe_images_batch(
+        self,
+        images: list[bytes],
+        prompt: str | None = None,
+    ) -> Generator[StreamChunk, None, None]:
+        """Mô tả nhiều hình ảnh trong một API call, streaming.
+
+        Response phải đánh số từng mô tả: '1. [mô tả]', '2. [mô tả]', ...
+
+        Args:
+            images: Danh sách dữ liệu ảnh.
+            prompt: Prompt tùy chỉnh (thay thế prompt mặc định).
+
+        Yields:
+            StreamChunk chứa text mô tả gộp cho tất cả ảnh.
+        """
+        ...
+
+    @abstractmethod
     def validate_key(self) -> bool:
         """Kiểm tra API key có hợp lệ không.
 
@@ -252,4 +271,21 @@ class BaseProvider(ABC):
         return prompt or (
             "Mô tả chi tiết nội dung hình ảnh này bằng tiếng Việt. "
             "Nếu là biểu đồ/bảng biểu, hãy trích xuất dữ liệu cụ thể."
+        )
+
+    def _build_image_batch_prompt(self, count: int, prompt: str | None = None) -> str:
+        """Tạo prompt cho mô tả nhiều hình ảnh trong một call.
+
+        Args:
+            count: Số lượng ảnh trong batch.
+            prompt: Prompt tùy chỉnh.
+
+        Returns:
+            Prompt yêu cầu AI đánh số từng mô tả.
+        """
+        return prompt or (
+            f"Dưới đây có {count} hình ảnh, đánh số từ 1 đến {count}. "
+            "Mô tả chi tiết từng ảnh bằng tiếng Việt. "
+            "Bắt đầu mỗi mô tả bằng số thứ tự ở đầu dòng mới, ví dụ: '1. [mô tả]', '2. [mô tả]'. "
+            "Nếu là biểu đồ hoặc bảng biểu, hãy trích xuất dữ liệu cụ thể."
         )

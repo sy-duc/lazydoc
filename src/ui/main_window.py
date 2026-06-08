@@ -277,14 +277,15 @@ class MainWindow(QWidget):
 
     # --- Slots ---
 
-    def _create_overlay(self) -> QWidget:
-        """Tạo lớp phủ tối mờ lên cửa sổ chính khi mở dialog."""
-        overlay = QWidget(self)
+    def _create_overlay(self, target: QWidget | None = None) -> QWidget:
+        """Tạo lớp phủ tối mờ lên widget chỉ định (hoặc cửa sổ chính nếu None)."""
+        parent: QWidget = target if target is not None else self
+        overlay = QWidget(parent)
         overlay.setObjectName("dialogOverlay")
         overlay.setStyleSheet(
             "#dialogOverlay { background-color: rgba(0, 0, 0, 120); }"
         )
-        overlay.setGeometry(self.rect())
+        overlay.setGeometry(parent.rect())
         overlay.show()
         overlay.raise_()
         return overlay
@@ -355,27 +356,28 @@ class MainWindow(QWidget):
         self._qa_history = []
         self._qa_current_answer = ""
 
-        self._blender.set_status("Đang xử lý...")
-        self._toolbar.set_processing(True)
-        self._cost_tracker.set_processing(True)
         self._summary_area.clear()
         self._provider_manager.token_counter.reset()
 
         for f in checked_files:
             self._file_table.update_file_status(f, "processing")
 
-        # Nếu còn file chưa extract → extract trước, sau đó tự động summary
+        # Nếu còn file chưa extract → extract trước (hiện processing ngay), sau đó summary
         uncached = [f for f in checked_files if self._extract_module.get_cached(f) is None]
         if uncached:
+            self._blender.set_status("Đang xử lý...")
+            self._toolbar.set_processing(True)
+            self._cost_tracker.set_processing(True)
             self._pending_summary = True
             self._extract_module.start_extract(checked_files)
         else:
+            # Tất cả đã cache → hiển thị dialog xác nhận trước, chưa set processing
             self._pending_summary = False
             contents: dict[Path, ExtractedContent] = {
                 f: self._extract_module.get_cached(f)
                 for f in checked_files
             }
-            self._summary_module.start_summary(contents)
+            self._confirm_and_run_summary(contents)
 
     def _on_extract_file_started(self, file_path: Path) -> None:
         """Cập nhật UI khi bắt đầu extract một file."""
@@ -414,7 +416,7 @@ class MainWindow(QWidget):
                 )
                 return
 
-            self._summary_module.start_summary(contents)
+            self._confirm_and_run_summary(contents)
 
     def _on_file_removed(self, path: Path) -> None:
         """Ẩn bảng file khi không còn file nào."""
@@ -573,6 +575,31 @@ class MainWindow(QWidget):
             self._summary_area.append_text(f"\n[Lỗi Q&A: {error_msg}]")
             logger.error("Q&A thất bại: %s", sanitize_error(error_msg))
 
+    def _confirm_and_run_summary(self, contents: dict[Path, ExtractedContent]) -> None:
+        """Hiển thị dialog xác nhận (nếu nhiều API call) rồi chạy summary."""
+        from src.core.cost_estimator import estimate_from_contents
+        from src.ui.dialogs.confirmation_dialog import ConfirmationDialog
+        from PySide6.QtWidgets import QDialog
+
+        estimate = estimate_from_contents(contents, "summary")
+        if not ConfirmationDialog.should_skip(estimate):
+            overlay = self._create_overlay()
+            dlg = ConfirmationDialog(estimate, mode="summary", parent=self)
+            result = dlg.exec()
+            overlay.deleteLater()
+            if result != QDialog.DialogCode.Accepted:
+                self._reset_processing_ui()
+                for f in contents:
+                    self._file_table.update_file_status(f, "ready")
+                return
+
+        # Bắt đầu processing chỉ sau khi người dùng xác nhận
+        self._blender.set_status("Đang tổng hợp...")
+        self._toolbar.set_processing(True)
+        self._cost_tracker.set_processing(True)
+
+        self._summary_module.start_summary(contents)
+
     def _reset_processing_ui(self) -> None:
         """Reset trạng thái UI về chế độ bình thường (không đang xử lý)."""
         self._blender.set_status("")
@@ -594,14 +621,40 @@ class MainWindow(QWidget):
 
         # Kết nối Dialog → TranslateModule, kèm summary context nếu đã có
         context = self._summary_context.strip() or None
-        dialog.translate_requested.connect(
-            lambda config: self._translate_module.start_translate(
-                {**config, "context": context}
-            )
-        )
+
+        def _on_translate_requested(config: dict) -> None:
+            if config.get("mode") == "smart" and self._provider_manager.provider:
+                from src.core.cost_estimator import estimate_from_contents, estimate_from_files
+                from src.ui.dialogs.confirmation_dialog import ConfirmationDialog
+                from PySide6.QtWidgets import QDialog
+
+                files: list[Path] = config["files"]
+                cached = {
+                    f: self._extract_module.get_cached(f)
+                    for f in files
+                    if self._extract_module.get_cached(f) is not None
+                }
+                if cached:
+                    estimate = estimate_from_contents(cached, "translate")
+                else:
+                    estimate = estimate_from_files(files, "translate")
+
+                if not ConfirmationDialog.should_skip(estimate):
+                    overlay = self._create_overlay(dialog)
+                    conf = ConfirmationDialog(estimate, mode="translate", parent=dialog)
+                    result = conf.exec()
+                    overlay.deleteLater()
+                    if result != QDialog.DialogCode.Accepted:
+                        dialog.on_translate_done()
+                        return
+
+            # Bắt đầu processing chỉ sau khi xác nhận (hoặc skip confirmation)
+            dialog.set_translating()
+            self._translate_module.start_translate({**config, "context": context})
+
+        dialog.translate_requested.connect(_on_translate_requested)
         dialog.stop_requested.connect(self._translate_module.cancel)
 
-        # Kết nối TranslateModule → Dialog (lưu ref để ngắt sau)
         def _on_completed(s, f, _):
             dialog.on_translate_done(s, f, str(self._translate_module.output_dir))
 

@@ -3,6 +3,8 @@
 import logging
 from pathlib import Path
 
+from src.core.config import ConfigManager
+from src.core.content_filter import filter_text_lines
 from src.core.logging_config import safe_file_label, sanitize_error
 from src.processors.base import ExtractedContent, FileProcessor
 
@@ -47,10 +49,11 @@ class WordProcessor(FileProcessor):
         tables_data: list[list[list[str]]] = []
         images: dict[str, bytes] = {}
 
+        filtering_enabled = ConfigManager().get("filtering.enabled", True)
+
         # Extract paragraphs
-        for para in doc.paragraphs:
-            if para.text.strip():
-                text_parts.append(para.text)
+        raw_parts = [para.text for para in doc.paragraphs if para.text.strip()]
+        text_parts = filter_text_lines(raw_parts) if filtering_enabled else raw_parts
 
         # Extract tables — chỉ lưu vào tables_data, không thêm vào text_parts
         # để tránh gửi cùng dữ liệu 2 lần lên AI (text_content + tables)

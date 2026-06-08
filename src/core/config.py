@@ -53,23 +53,35 @@ class ConfigManager:
     def get(self, key: str, default: Any = None) -> Any:
         """Lấy giá trị config theo key (hỗ trợ dot notation).
 
+        Dùng greedy matching để xử lý đúng các key có dấu chấm trong tên
+        (ví dụ model name "gemini-2.5-flash" trong path pricing.gemini.gemini-2.5-flash.input).
+
         Args:
-            key: Key cấu hình, hỗ trợ dạng "pricing.gemini.gemini-1.5-flash.input".
+            key: Key cấu hình, hỗ trợ dạng "pricing.gemini.gemini-2.5-flash.input".
             default: Giá trị mặc định nếu key không tồn tại.
 
         Returns:
             Giá trị config hoặc default.
         """
-        keys = key.split(".")
+        parts = key.split(".")
         value: Any = self._data
-        for k in keys:
-            if isinstance(value, dict):
-                value = value.get(k)
-            else:
+        i = 0
+        while i < len(parts):
+            if not isinstance(value, dict):
                 return default
-            if value is None:
+            # Greedy: thử ghép nhiều segment nhất có thể để khớp với dict key
+            # (xử lý key chứa dấu chấm như "gemini-2.5-flash")
+            matched = False
+            for end in range(len(parts), i, -1):
+                candidate = ".".join(parts[i:end])
+                if candidate in value:
+                    value = value[candidate]
+                    i = end
+                    matched = True
+                    break
+            if not matched:
                 return default
-        return value
+        return value if value is not None else default
 
     def set(self, key: str, value: Any) -> None:
         """Gán giá trị config theo key (hỗ trợ dot notation) và lưu file.

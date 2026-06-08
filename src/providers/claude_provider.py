@@ -178,6 +178,54 @@ class ClaudeProvider(BaseProvider):
             logger.error("Claude describe_image lỗi: %s", sanitize_error(e))
             raise
 
+    def describe_images_batch(
+        self,
+        images: list[bytes],
+        prompt: str | None = None,
+    ) -> Generator[StreamChunk, None, None]:
+        """Mô tả nhiều hình ảnh trong một API call bằng Claude Vision."""
+        batch_prompt = self._build_image_batch_prompt(len(images), prompt)
+
+        content_blocks: list = []
+        for img_data in images:
+            content_blocks.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": base64.b64encode(img_data).decode("utf-8"),
+                },
+            })
+        content_blocks.append({"type": "text", "text": batch_prompt})
+
+        messages = [{"role": "user", "content": content_blocks}]
+
+        try:
+            input_tokens = 0
+            output_tokens = 0
+
+            with self._client.messages.stream(
+                model=self._model,
+                max_tokens=4096,
+                messages=messages,
+                temperature=0.3,
+            ) as stream:
+                for text in stream.text_stream:
+                    yield StreamChunk(text=text)
+
+                response = stream.get_final_message()
+                input_tokens = response.usage.input_tokens
+                output_tokens = response.usage.output_tokens
+
+            yield StreamChunk(
+                is_final=True,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            )
+        except Exception as e:
+            logger.error("Claude describe_images_batch lỗi: %s", sanitize_error(e))
+            raise
+
     def validate_key(self) -> bool:
         """Kiểm tra API key Claude bằng cách đếm token (miễn phí)."""
         try:

@@ -3,6 +3,8 @@
 import logging
 from pathlib import Path
 
+from src.core.config import ConfigManager
+from src.core.content_filter import filter_text_lines
 from src.core.logging_config import safe_file_label
 from src.processors.base import ExtractedContent, FileProcessor
 
@@ -33,6 +35,10 @@ class TxtProcessor(FileProcessor):
         except UnicodeDecodeError:
             text = file_path.read_text(encoding="latin-1")
             logger.warning("File không phải UTF-8, đọc bằng latin-1: %s", safe_file_label(file_path))
+
+        if ConfigManager().get("filtering.enabled", True):
+            lines = filter_text_lines(text.splitlines())
+            text = "\n".join(lines)
 
         content = ExtractedContent(
             file_path=file_path,

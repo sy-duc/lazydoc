@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 _MAX_RETRIES = 3
 _RETRY_BASE_DELAY = 2.0
 
+# Số ảnh tối đa gom chung trong một API call (batch vision)
+_BATCH_IMAGE_SIZE = 5
+
 _RETRYABLE_KEYWORDS = (
     "timeout", "timed out", "connection", "reset by peer",
     "rate limit", "too many requests", "overloaded", "unavailable",
@@ -343,12 +346,25 @@ class SummaryWorker(QThread):
                 shapes_text = "\n".join(texts)
                 parts.append(f"[Shapes - {section}]\n{shapes_text}")
 
-        # Hình ảnh: mô tả bằng AI vision
+        # Hình ảnh: mô tả bằng AI vision (gom batch tối đa _BATCH_IMAGE_SIZE ảnh/call)
         if content.images and not self._cancelled:
-            for loc, img_data in content.images.items():
-                desc = self._describe_image(img_data)
-                if desc:
-                    parts.append(f"[Hình ảnh - {loc}]\n{desc}")
+            image_items = list(content.images.items())
+            for batch_start in range(0, len(image_items), _BATCH_IMAGE_SIZE):
+                if self._cancelled:
+                    break
+                batch = image_items[batch_start:batch_start + _BATCH_IMAGE_SIZE]
+                locs = [loc for loc, _ in batch]
+                imgs = [img_data for _, img_data in batch]
+
+                if len(batch) == 1:
+                    desc = self._describe_image(imgs[0])
+                    if desc:
+                        parts.append(f"[Hình ảnh - {locs[0]}]\n{desc}")
+                else:
+                    descriptions = self._describe_images_batch(imgs)
+                    for loc, desc in zip(locs, descriptions):
+                        if desc:
+                            parts.append(f"[Hình ảnh - {loc}]\n{desc}")
 
         return "\n\n".join(parts)
 
@@ -374,6 +390,66 @@ class SummaryWorker(QThread):
         except Exception as e:
             logger.warning("Không thể mô tả hình ảnh: %s", sanitize_error(e))
             return "[Không thể mô tả hình ảnh]"
+
+    def _describe_images_batch(self, images: list[bytes]) -> list[str]:
+        """Mô tả nhiều hình ảnh trong một API call.
+
+        Nếu batch call thất bại, tự động fallback sang mô tả từng ảnh riêng lẻ.
+
+        Args:
+            images: Danh sách dữ liệu ảnh.
+
+        Returns:
+            Danh sách mô tả theo đúng thứ tự ảnh đầu vào.
+        """
+        try:
+            text_parts: list[str] = []
+            for chunk in self._provider.describe_images_batch(images):
+                if self._cancelled:
+                    break
+                if chunk.text:
+                    text_parts.append(chunk.text)
+                if chunk.is_final:
+                    self.cost_updated.emit(chunk.input_tokens, chunk.output_tokens)
+            return self._parse_batch_response("".join(text_parts), len(images))
+        except Exception as e:
+            logger.warning(
+                "Batch image description thất bại, fallback sang từng ảnh: %s",
+                sanitize_error(e),
+            )
+            return [self._describe_image(img) for img in images]
+
+    @staticmethod
+    def _parse_batch_response(text: str, count: int) -> list[str]:
+        """Bóc tách response batch thành danh sách mô tả theo số thứ tự.
+
+        Tìm các marker dạng '1. ', '2. ' ở đầu dòng để tách.
+        Nếu không tìm đủ marker, trả về danh sách rỗng → caller dùng fallback.
+
+        Args:
+            text: Toàn bộ text response từ AI.
+            count: Số ảnh mong đợi.
+
+        Returns:
+            Danh sách mô tả (len == count), hoặc list rỗng nếu parse thất bại.
+        """
+        import re
+        pattern = re.compile(r'^\s*\d+\.\s+', re.MULTILINE)
+        matches = list(pattern.finditer(text))
+
+        if len(matches) < count:
+            # Không đủ marker → trả về text thô chia đều (heuristic cuối cùng)
+            logger.warning(
+                "Batch response chỉ có %d marker, mong đợi %d.", len(matches), count
+            )
+            return [""] * count
+
+        descriptions = []
+        for i, match in enumerate(matches[:count]):
+            start = match.end()
+            end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+            descriptions.append(text[start:end].strip())
+        return descriptions
 
     # --- Chunking ---
 

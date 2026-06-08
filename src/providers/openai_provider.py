@@ -168,6 +168,47 @@ class OpenAIProvider(BaseProvider):
             logger.error("OpenAI describe_image lỗi: %s", sanitize_error(e))
             raise
 
+    def describe_images_batch(
+        self,
+        images: list[bytes],
+        prompt: str | None = None,
+    ) -> Generator[StreamChunk, None, None]:
+        """Mô tả nhiều hình ảnh trong một API call bằng OpenAI Vision."""
+        batch_prompt = self._build_image_batch_prompt(len(images), prompt)
+
+        content: list = [{"type": "text", "text": batch_prompt}]
+        for img_data in images:
+            content.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/png;base64,{base64.b64encode(img_data).decode('utf-8')}",
+                },
+            })
+
+        messages = [{"role": "user", "content": content}]
+
+        try:
+            stream = self._client.chat.completions.create(
+                model=self._model,
+                messages=messages,
+                stream=True,
+                stream_options={"include_usage": True},
+                temperature=0.3,
+            )
+
+            for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield StreamChunk(text=chunk.choices[0].delta.content)
+                if chunk.usage:
+                    yield StreamChunk(
+                        is_final=True,
+                        input_tokens=chunk.usage.prompt_tokens,
+                        output_tokens=chunk.usage.completion_tokens,
+                    )
+        except Exception as e:
+            logger.error("OpenAI describe_images_batch lỗi: %s", sanitize_error(e))
+            raise
+
     def validate_key(self) -> bool:
         """Kiểm tra API key OpenAI bằng cách liệt kê models."""
         try:
