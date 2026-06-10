@@ -5,6 +5,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
+from src.core.error_messages import format_file_error
 from src.core.logging_config import safe_file_label, sanitize_error
 from src.processors.base import ExtractedContent
 from src.processors.factory import ProcessorFactory
@@ -58,7 +59,7 @@ class ExtractWorker(QThread):
                 logger.info("Extract thành công: %s", safe_file_label(file_path))
 
             except Exception as e:
-                error_msg = str(e)
+                error_msg = format_file_error(e)
                 self.file_failed.emit(file_path, error_msg)
                 fail_count += 1
                 logger.error(

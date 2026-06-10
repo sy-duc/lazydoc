@@ -59,6 +59,7 @@ class MainWindow(QWidget):
         self._grind_files: list[Path] = []
         self._grind_cancelled = False
         self._pending_summary = False
+        self._extract_errors: dict[Path, str] = {}
         self._detail_report_path: str = ""
         self._summary_context: str = ""
         self._qa_history: list[tuple[str, str]] = []
@@ -351,6 +352,7 @@ class MainWindow(QWidget):
 
         self._grind_files = list(checked_files)
         self._grind_cancelled = False
+        self._extract_errors.clear()
         self._detail_report_path = ""
         self._summary_context = ""
         self._qa_history = []
@@ -390,6 +392,7 @@ class MainWindow(QWidget):
 
     def _on_extract_file_failed(self, file_path: Path, error_msg: str) -> None:
         """Cập nhật UI khi extract một file thất bại."""
+        self._extract_errors[file_path] = error_msg
         self._file_table.update_file_status(file_path, "error")
         logger.error("Extract thất bại: %s - %s", safe_file_label(file_path), sanitize_error(error_msg))
 
@@ -411,8 +414,14 @@ class MainWindow(QWidget):
                 self._reset_processing_ui()
                 for f in self._grind_files:
                     self._file_table.update_file_status(f, "error")
+                error_details = list(dict.fromkeys(self._extract_errors.values()))
+                message = (
+                    "\n".join(error_details)
+                    if error_details
+                    else "Extract thất bại. Không thể tổng hợp."
+                )
                 self._summary_area.set_summary(
-                    "Extract thất bại. Không thể tổng hợp.", typing_effect=False
+                    message, typing_effect=False
                 )
                 return
 
@@ -621,8 +630,10 @@ class MainWindow(QWidget):
 
         # Kết nối Dialog → TranslateModule, kèm summary context nếu đã có
         context = self._summary_context.strip() or None
+        translate_errors: list[str] = []
 
         def _on_translate_requested(config: dict) -> None:
+            translate_errors.clear()
             if config.get("mode") == "smart" and self._provider_manager.provider:
                 from src.core.cost_estimator import estimate_from_contents, estimate_from_files
                 from src.ui.dialogs.confirmation_dialog import ConfirmationDialog
@@ -655,13 +666,22 @@ class MainWindow(QWidget):
         dialog.translate_requested.connect(_on_translate_requested)
         dialog.stop_requested.connect(self._translate_module.cancel)
 
+        def _on_file_failed(_file_path: Path, error_msg: str) -> None:
+            translate_errors.append(error_msg)
+
         def _on_completed(s, f, _):
-            dialog.on_translate_done(s, f, str(self._translate_module.output_dir))
+            dialog.on_translate_done(
+                s,
+                f,
+                str(self._translate_module.output_dir),
+                translate_errors,
+            )
 
         def _on_error(msg):
             self._on_translate_error(dialog, msg)
 
         self._translate_module.status_updated.connect(dialog.update_status)
+        self._translate_module.file_failed.connect(_on_file_failed)
         self._translate_module.translate_completed.connect(_on_completed)
         self._translate_module.error_occurred.connect(_on_error)
 
@@ -669,6 +689,7 @@ class MainWindow(QWidget):
 
         # Ngắt toàn bộ kết nối khi đóng dialog
         self._translate_module.status_updated.disconnect(dialog.update_status)
+        self._translate_module.file_failed.disconnect(_on_file_failed)
         self._translate_module.translate_completed.disconnect(_on_completed)
         self._translate_module.error_occurred.disconnect(_on_error)
         overlay.deleteLater()

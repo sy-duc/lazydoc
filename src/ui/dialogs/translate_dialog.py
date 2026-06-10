@@ -690,6 +690,7 @@ class TranslateDialog(QDialog):
         success_count: int = 0,
         fail_count: int = 0,
         output_dir: str = "",
+        error_messages: list[str] | None = None,
     ) -> None:
         """Xử lý khi dịch hoàn tất.
 
@@ -697,14 +698,22 @@ class TranslateDialog(QDialog):
             success_count: Số file dịch thành công.
             fail_count: Số file dịch thất bại.
             output_dir: Đường dẫn thư mục chứa file output.
+            error_messages: Chi tiết lỗi thân thiện của các file thất bại.
         """
         self._set_processing(False)
+        error_details = list(dict.fromkeys(error_messages or []))
+        error_suffix = f"\n\n{error_details[0]}" if error_details else ""
 
         if success_count > 0 and fail_count == 0:
             msg = f"Đã dịch thành công {success_count} file.\n\nFile lưu tại:\n{output_dir}"
             MessageDialog.information(self, "Dịch hoàn tất", msg)
         elif success_count > 0 and fail_count > 0:
-            msg = f"Đã dịch thành công {success_count} file.\n{fail_count} file thất bại.\n\nFile lưu tại:\n{output_dir}"
+            msg = (
+                f"Đã dịch thành công {success_count} file.\n"
+                f"{fail_count} file thất bại."
+                f"{error_suffix}\n\nFile lưu tại:\n{output_dir}"
+            )
             MessageDialog.warning(self, "Dịch hoàn tất", msg)
         elif fail_count > 0:
-            MessageDialog.critical(self, "Dịch thất bại", f"Dịch thất bại {fail_count} file.")
+            msg = f"Dịch thất bại {fail_count} file.{error_suffix}"
+            MessageDialog.critical(self, "Dịch thất bại", msg)

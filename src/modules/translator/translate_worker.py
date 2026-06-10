@@ -7,6 +7,7 @@ from typing import Callable
 
 from PySide6.QtCore import QThread, Signal
 
+from src.core.error_messages import format_file_error
 from src.core.logging_config import safe_file_label, sanitize_error
 from src.modules.translator.argos_engine import ArgosEngine
 
@@ -309,6 +310,10 @@ class TranslateWorker(QThread):
         Returns:
             Chuỗi thông báo dễ hiểu.
         """
+        file_error = format_file_error(e)
+        if file_error != str(e):
+            return file_error
+
         s = str(e).lower()
         if isinstance(e, MemoryError) or "memory" in s:
             return "File quá lớn, không đủ bộ nhớ để xử lý."

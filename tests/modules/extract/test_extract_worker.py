@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PySide6.QtCore import QCoreApplication
 
+from src.core.error_messages import FILE_ACCESS_ERROR_MESSAGE
 from src.modules.extract.extract_worker import ExtractWorker
 from src.processors.base import ExtractedContent
 
@@ -95,6 +96,24 @@ class TestExtractWorker:
         assert len(failed_files) == 1
         assert "File lỗi" in error_msgs[0]
         assert final_results == [(0, 1)]
+
+    def test_worker_formats_permission_error(
+        self, qapp: QCoreApplication, sample_txt_file: Path
+    ) -> None:
+        """File bị khóa được báo bằng nội dung thân thiện."""
+        error_msgs: list[str] = []
+        worker = ExtractWorker([sample_txt_file])
+        worker.file_failed.connect(lambda _path, error: error_msgs.append(error))
+
+        with patch(
+            "src.modules.extract.extract_worker.ProcessorFactory.get_processor"
+        ) as mock_factory:
+            mock_processor = MagicMock()
+            mock_processor.extract.side_effect = PermissionError("Permission denied")
+            mock_factory.return_value = mock_processor
+            worker.run()
+
+        assert error_msgs == [FILE_ACCESS_ERROR_MESSAGE]
 
     def test_worker_cancel(
         self, qapp: QCoreApplication, tmp_path: Path
