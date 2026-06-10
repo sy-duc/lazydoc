@@ -6,8 +6,10 @@ from pathlib import Path
 
 # Thêm thư mục gốc dự án vào sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+APP_ICON_PATH = PROJECT_ROOT / "favicon.ico"
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from src.core.database import DatabaseManager
@@ -28,6 +30,13 @@ logger = logging.getLogger("lazydoc")
 def main() -> None:
     """Khởi chạy ứng dụng LazyDoc."""
     logger.info("Đang khởi động LazyDoc...")
+
+    if sys.platform == "win32":
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            "LazyDoc.LazyDoc"
+        )
 
     # Khởi tạo core services
     config = ConfigManager()
@@ -50,6 +59,7 @@ def main() -> None:
 
     # Khởi chạy giao diện
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon(str(APP_ICON_PATH)))
     window = MainWindow(provider_manager=provider_manager)
     window.show()
     logger.info("LazyDoc khởi động hoàn tất.")
