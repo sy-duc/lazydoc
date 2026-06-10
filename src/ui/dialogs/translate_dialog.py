@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 TARGET_LANGUAGES = [
     ("vi", "Tiếng Việt"),
     ("en", "English"),
-    ("ja", "日本語"),
+    ("ja", "Tiếng Nhật"),
 ]
 
 # Lĩnh vực dịch thuật
@@ -310,13 +310,13 @@ class TranslateDialog(QDialog):
         expand_layout.addWidget(mode_container)
 
         # Lĩnh vực (radio buttons)
-        domain_lbl = QLabel(self._i18n.t("translate.domain"))
-        domain_lbl.setObjectName("sectionLabel")
-        expand_layout.addWidget(domain_lbl)
+        self._domain_label = QLabel(self._i18n.t("translate.domain"))
+        self._domain_label.setObjectName("sectionLabel")
+        expand_layout.addWidget(self._domain_label)
 
         self._domain_group = QButtonGroup(self)
-        domain_container = QWidget()
-        domain_flow = FlowLayout(domain_container, spacing=8)
+        self._domain_container = QWidget()
+        domain_flow = FlowLayout(self._domain_container, spacing=8)
         for i, domain_key in enumerate(DOMAINS):
             radio = QRadioButton(self._i18n.t(f"translate.domain_{domain_key}"))
             radio.setObjectName("optionRadio")
@@ -326,16 +326,16 @@ class TranslateDialog(QDialog):
                 radio.setChecked(True)
             self._domain_group.addButton(radio, i)
             domain_flow.addWidget(radio)
-        expand_layout.addWidget(domain_container)
+        expand_layout.addWidget(self._domain_container)
 
         # Văn phong (radio buttons)
-        style_lbl = QLabel(self._i18n.t("translate.style"))
-        style_lbl.setObjectName("sectionLabel")
-        expand_layout.addWidget(style_lbl)
+        self._style_label = QLabel(self._i18n.t("translate.style"))
+        self._style_label.setObjectName("sectionLabel")
+        expand_layout.addWidget(self._style_label)
 
         self._style_group = QButtonGroup(self)
-        style_container = QWidget()
-        style_flow = FlowLayout(style_container, spacing=8)
+        self._style_container = QWidget()
+        style_flow = FlowLayout(self._style_container, spacing=8)
         for i, style_key in enumerate(STYLES):
             radio = QRadioButton(self._i18n.t(f"translate.style_{style_key}"))
             radio.setObjectName("optionRadio")
@@ -345,7 +345,12 @@ class TranslateDialog(QDialog):
                 radio.setChecked(True)
             self._style_group.addButton(radio, i)
             style_flow.addWidget(radio)
-        expand_layout.addWidget(style_container)
+        expand_layout.addWidget(self._style_container)
+
+        self._mode_group.buttonToggled.connect(
+            lambda _button, checked: checked and self._update_smart_options_state()
+        )
+        self._update_smart_options_state()
 
         layout.addWidget(self._expand_area)
 
@@ -604,6 +609,19 @@ class TranslateDialog(QDialog):
         self.stop_requested.emit()
         logger.info("Người dùng yêu cầu dừng dịch.")
 
+    def _update_smart_options_state(self) -> None:
+        """Chỉ cho phép chọn lĩnh vực và văn phong ở chế độ dịch thông minh."""
+        mode_button = self._mode_group.checkedButton()
+        smart_enabled = (
+            not self._is_processing
+            and mode_button is not None
+            and mode_button.property("option_value") == "smart"
+        )
+        self._domain_label.setEnabled(smart_enabled)
+        self._domain_container.setEnabled(smart_enabled)
+        self._style_label.setEnabled(smart_enabled)
+        self._style_container.setEnabled(smart_enabled)
+
     def _set_processing(self, processing: bool) -> None:
         """Chuyển đổi trạng thái xử lý.
 
@@ -617,9 +635,9 @@ class TranslateDialog(QDialog):
         self._expand_btn.setEnabled(not processing)
         self._lang_combo.setEnabled(not processing)
         # Disable/enable radio buttons
-        for group in (self._mode_group, self._domain_group, self._style_group):
-            for btn in group.buttons():
-                btn.setEnabled(not processing)
+        for btn in self._mode_group.buttons():
+            btn.setEnabled(not processing)
+        self._update_smart_options_state()
         self._stop_btn.setVisible(processing)
         self._status_label.setVisible(processing)
 
