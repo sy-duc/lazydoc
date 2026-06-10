@@ -1,45 +1,10 @@
-# LazyDoc — Cấu hình ứng dụng
-
-# Giá token theo provider và model (USD per 1M tokens)
-pricing:
-  gemini:
-    gemini-2.5-flash:
-      input: 0.15
-      output: 0.60
-    gemini-2.5-flash-lite:
-      input: 0.075
-      output: 0.30
-    gemini-2.5-pro:
-      input: 1.25
-      output: 10.00
-    gemini-1.5-flash:
-      input: 0.075
-      output: 0.30
-    gemini-1.5-pro:
-      input: 1.25
-      output: 5.00
-  openai:
-    gpt-4o:
-      input: 2.50
-      output: 10.00
-    gpt-4o-mini:
-      input: 0.15
-      output: 0.60
-  claude:
-    claude-sonnet-4-20250514:
-      input: 3.00
-      output: 15.00
-    claude-haiku-4-5-20251001:
-      input: 0.80
-      output: 4.00
-
-# Tỉ giá USD → VND (cập nhật thủ công khi cần)
-usd_to_vnd: 25800
-
-# Cấu hình chunking
 chunking:
-  chunk_size: 100000    # Kích thước mỗi chunk (tokens)
-  overlap_size: 500     # Kích thước overlap giữa các chunk (tokens)
-
-# Thư mục tải về (null = tự động detect thư mục Downloads)
+  chunk_size: 100000
+  overlap_size: 500
+confirmation:
+  enabled: true
+  min_api_calls: 5
+  vision_weight: 2
+filtering:
+  enabled: true
 downloads_dir: null

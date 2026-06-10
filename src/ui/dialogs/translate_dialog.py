@@ -588,7 +588,8 @@ class TranslateDialog(QDialog):
             "domain": self._domain_group.checkedButton().property("option_value"),
             "style": self._style_group.checkedButton().property("option_value"),
         }
-        self._set_processing(True)
+        # Không set processing ở đây — caller (main_window) sẽ gọi set_translating()
+        # sau khi người dùng xác nhận chi phí.
         self.translate_requested.emit(config)
         logger.info(
             "Yêu cầu dịch %d file sang %s (chế độ: %s).",
@@ -652,6 +653,10 @@ class TranslateDialog(QDialog):
         self._fun_timers.clear()
 
     # --- Public API ---
+
+    def set_translating(self) -> None:
+        """Chuyển UI sang trạng thái đang dịch, sau khi người dùng xác nhận chi phí."""
+        self._set_processing(True)
 
     def update_status(self, msg: str) -> None:
         """Cập nhật thông báo trạng thái dịch.

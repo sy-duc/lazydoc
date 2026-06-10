@@ -61,8 +61,13 @@ class GeminiProvider(BaseProvider):
             Tên model mặc định.
         """
         models = self._fetch_available_models()
-        # Lọc bỏ preview, experimental
-        stable = [m for m in models if "preview" not in m and "exp" not in m]
+        # Lọc bỏ preview, experimental, và alias "-latest" (không có trong bảng giá)
+        stable = [
+            m for m in models
+            if "preview" not in m
+            and "exp" not in m
+            and not m.endswith("-latest")
+        ]
         if not stable:
             return self._FALLBACK_MODEL
 
@@ -169,6 +174,41 @@ class GeminiProvider(BaseProvider):
             )
         except Exception as e:
             logger.error("Gemini describe_image lỗi: %s", sanitize_error(e))
+            raise
+
+    def describe_images_batch(
+        self,
+        images: list[bytes],
+        prompt: str | None = None,
+    ) -> Generator[StreamChunk, None, None]:
+        """Mô tả nhiều hình ảnh trong một API call bằng Gemini Vision."""
+        batch_prompt = self._build_image_batch_prompt(len(images), prompt)
+
+        contents: list = [batch_prompt]
+        for img_data in images:
+            contents.append(types.Part.from_bytes(data=img_data, mime_type="image/png"))
+
+        try:
+            response_stream = self._client.models.generate_content_stream(
+                model=self._model,
+                contents=contents,
+                config=types.GenerateContentConfig(temperature=0.3),
+            )
+
+            last_chunk = None
+            for chunk in response_stream:
+                if chunk.text:
+                    yield StreamChunk(text=chunk.text)
+                last_chunk = chunk
+
+            usage = last_chunk.usage_metadata if last_chunk else None
+            yield StreamChunk(
+                is_final=True,
+                input_tokens=usage.prompt_token_count if usage else 0,
+                output_tokens=usage.candidates_token_count if usage else 0,
+            )
+        except Exception as e:
+            logger.error("Gemini describe_images_batch lỗi: %s", sanitize_error(e))
             raise
 
     def validate_key(self) -> bool:

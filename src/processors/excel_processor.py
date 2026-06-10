@@ -3,6 +3,8 @@
 import logging
 from pathlib import Path
 
+from src.core.config import ConfigManager
+from src.core.content_filter import filter_excel_table
 from src.core.logging_config import safe_file_label
 from src.processors.base import ExtractedContent, FileProcessor
 
@@ -50,6 +52,8 @@ class ExcelProcessor(FileProcessor):
         tables: dict[str, list[list[list[str]]]] = {}
         shapes_text: dict[str, list[str]] = {}
 
+        filtering_enabled = ConfigManager().get("filtering.enabled", True)
+
         for sheet_name in wb.sheetnames:
             ws = wb[sheet_name]
 
@@ -69,10 +73,12 @@ class ExcelProcessor(FileProcessor):
                         row_data.append("")
                 rows_data.append(row_data)
 
-            # Lưu vào tables — text_content bỏ qua để tránh gửi cùng dữ liệu 2 lần lên AI
-            non_empty_rows = [r for r in rows_data if any(c.strip() for c in r)]
-            if non_empty_rows:
-                tables[sheet_name] = [rows_data]
+            # Lọc hàng/cột rỗng — text_content bỏ qua để tránh gửi cùng dữ liệu 2 lần lên AI
+            final_rows = filter_excel_table(rows_data) if filtering_enabled else [
+                r for r in rows_data if any(c.strip() for c in r)
+            ]
+            if final_rows:
+                tables[sheet_name] = [final_rows]
 
         wb.close()
 
@@ -145,6 +151,8 @@ class ExcelProcessor(FileProcessor):
         text_content: dict[str, str] = {}
         tables: dict[str, list[list[list[str]]]] = {}
 
+        filtering_enabled = ConfigManager().get("filtering.enabled", True)
+
         for sheet_idx in range(wb.nsheets):
             ws = wb.sheet_by_index(sheet_idx)
             sheet_name = ws.name
@@ -157,15 +165,14 @@ class ExcelProcessor(FileProcessor):
                     row_data.append(str(cell_value) if cell_value != "" else "")
                 rows_data.append(row_data)
 
-            text_lines = []
-            for row in rows_data:
-                line = "\t".join(row)
-                if line.strip():
-                    text_lines.append(line)
+            final_rows = filter_excel_table(rows_data) if filtering_enabled else [
+                r for r in rows_data if any(c.strip() for c in r)
+            ]
 
+            text_lines = ["\t".join(r) for r in final_rows]
             if text_lines:
                 text_content[sheet_name] = "\n".join(text_lines)
-                tables[sheet_name] = [rows_data]
+                tables[sheet_name] = [final_rows]
 
         content = ExtractedContent(
             file_path=file_path,
