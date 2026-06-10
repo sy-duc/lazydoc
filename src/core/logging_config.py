@@ -32,6 +32,18 @@ _SENSITIVE_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"sk-[A-Za-z0-9_\-]{8,}", re.I), "[REDACTED]"),
 )
 
+# Tiền tố logger của thư viện bên thứ ba cần lọc khỏi log file
+_THIRD_PARTY_PREFIXES = (
+    "argostranslate", "google", "openai", "httpx", "httpcore", "urllib3",
+)
+
+
+class _ThirdPartyFilter(logging.Filter):
+    """Lọc bỏ log từ thư viện bên thứ ba, tránh ghi nội dung tài liệu vào log."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not any(record.name.startswith(p) for p in _THIRD_PARTY_PREFIXES)
+
 
 def get_log_dir() -> Path:
     """Return the user-local log directory and create it if needed."""
@@ -108,6 +120,8 @@ def configure_logging(level: int = logging.INFO) -> Path:
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
+    _filter = _ThirdPartyFilter()
+
     file_handler = RotatingFileHandler(
         log_file,
         maxBytes=LOG_MAX_BYTES,
@@ -115,6 +129,7 @@ def configure_logging(level: int = logging.INFO) -> Path:
         encoding="utf-8",
     )
     file_handler.setFormatter(formatter)
+    file_handler.addFilter(_filter)
 
     root = logging.getLogger()
     root.handlers.clear()
@@ -124,6 +139,7 @@ def configure_logging(level: int = logging.INFO) -> Path:
     if sys.stderr is not None:
         stream_handler = logging.StreamHandler()
         stream_handler.setFormatter(formatter)
+        stream_handler.addFilter(_filter)
         root.addHandler(stream_handler)
 
     install_crash_hooks()
