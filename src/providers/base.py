@@ -269,8 +269,12 @@ class BaseProvider(ABC):
             Prompt cho AI vision.
         """
         return prompt or (
-            "Mô tả chi tiết nội dung hình ảnh này bằng tiếng Việt. "
-            "Nếu là biểu đồ/bảng biểu, hãy trích xuất dữ liệu cụ thể."
+            "Phân tích hình ảnh sau:\n"
+            "- Nếu là biểu đồ, đồ thị, bảng số liệu, hoặc infographic có dữ liệu "
+            "→ trích xuất ĐẦY ĐỦ: tiêu đề, nhãn trục, từng giá trị/con số, chú thích.\n"
+            "- Nếu là ảnh minh họa, ảnh chụp, icon, hoặc hình trang trí "
+            "→ mô tả ngắn gọn nội dung chính (2-3 câu).\n"
+            "Trả lời bằng tiếng Việt."
         )
 
     def _build_image_batch_prompt(self, count: int, prompt: str | None = None) -> str:
@@ -285,7 +289,12 @@ class BaseProvider(ABC):
         """
         return prompt or (
             f"Dưới đây có {count} hình ảnh, đánh số từ 1 đến {count}. "
-            "Mô tả chi tiết từng ảnh bằng tiếng Việt. "
-            "Bắt đầu mỗi mô tả bằng số thứ tự ở đầu dòng mới, ví dụ: '1. [mô tả]', '2. [mô tả]'. "
-            "Nếu là biểu đồ hoặc bảng biểu, hãy trích xuất dữ liệu cụ thể."
+            "Phân tích từng ảnh và bắt đầu mỗi mô tả bằng số thứ tự ở đầu dòng mới "
+            "(ví dụ: '1. [mô tả]', '2. [mô tả]').\n"
+            "Với mỗi ảnh, áp dụng quy tắc sau:\n"
+            "- Nếu là biểu đồ, đồ thị, bảng số liệu, hoặc infographic có dữ liệu "
+            "→ trích xuất ĐẦY ĐỦ: tiêu đề, nhãn trục, từng giá trị/con số, chú thích.\n"
+            "- Nếu là ảnh minh họa, ảnh chụp, icon, hoặc hình trang trí "
+            "→ mô tả ngắn gọn nội dung chính (2-3 câu).\n"
+            "Trả lời bằng tiếng Việt."
         )

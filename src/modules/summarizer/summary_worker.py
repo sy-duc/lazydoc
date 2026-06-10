@@ -1,5 +1,6 @@
 """SummaryWorker — Worker thread cho quá trình tổng hợp tài liệu."""
 
+import io
 import logging
 import time
 from datetime import datetime
@@ -21,6 +22,9 @@ _RETRY_BASE_DELAY = 2.0
 
 # Số ảnh tối đa gom chung trong một API call (batch vision)
 _BATCH_IMAGE_SIZE = 5
+
+# Kích thước tối đa (cạnh dài) trước khi gửi Vision API — giảm token ảnh
+_MAX_IMAGE_PX = 1280
 
 _RETRYABLE_KEYWORDS = (
     "timeout", "timed out", "connection", "reset by peer",
@@ -354,7 +358,7 @@ class SummaryWorker(QThread):
                     break
                 batch = image_items[batch_start:batch_start + _BATCH_IMAGE_SIZE]
                 locs = [loc for loc, _ in batch]
-                imgs = [img_data for _, img_data in batch]
+                imgs = [self._resize_image(img_data) for _, img_data in batch]
 
                 if len(batch) == 1:
                     desc = self._describe_image(imgs[0])
@@ -367,6 +371,32 @@ class SummaryWorker(QThread):
                             parts.append(f"[Hình ảnh - {loc}]\n{desc}")
 
         return "\n\n".join(parts)
+
+    @staticmethod
+    def _resize_image(image_data: bytes, max_px: int = _MAX_IMAGE_PX) -> bytes:
+        """Resize ảnh xuống max_px (cạnh dài) nếu cần, giữ tỉ lệ khung hình.
+
+        Args:
+            image_data: Dữ liệu ảnh gốc dạng bytes.
+            max_px: Kích thước tối đa cho cạnh dài (pixel).
+
+        Returns:
+            Dữ liệu ảnh đã resize (PNG), hoặc ảnh gốc nếu resize thất bại.
+        """
+        try:
+            from PIL import Image
+            img = Image.open(io.BytesIO(image_data))
+            if max(img.width, img.height) <= max_px:
+                return image_data
+            ratio = max_px / max(img.width, img.height)
+            new_size = (int(img.width * ratio), int(img.height * ratio))
+            img = img.resize(new_size, Image.LANCZOS)
+            buf = io.BytesIO()
+            img.save(buf, format="PNG", optimize=True)
+            return buf.getvalue()
+        except Exception as e:
+            logger.warning("Không thể resize ảnh, dùng ảnh gốc: %s", sanitize_error(e))
+            return image_data
 
     def _describe_image(self, image_data: bytes) -> str:
         """Mô tả hình ảnh bằng AI vision.
@@ -677,7 +707,10 @@ class SummaryWorker(QThread):
             "- Sử dụng checkbox markdown cho phần đề xuất\n"
             "- QUAN TRỌNG: Đừng chỉ tóm tắt — hãy PHÂN TÍCH, BỔ SUNG, và ĐỀ XUẤT. "
             "Mục tiêu là người đọc hiểu mọi thứ từ báo cáo này mà không cần "
-            "tra Google hay hỏi thêm ai.\n\n"
+            "tra Google hay hỏi thêm ai.\n"
+            "- Điều chỉnh độ chi tiết tương xứng với nội dung: "
+            "tài liệu đơn giản → báo cáo cô đọng; tài liệu phức tạp → báo cáo đầy đủ. "
+            "Không kéo dài nhân tạo.\n\n"
             "TRỰC QUAN HÓA VỚI MERMAID:\n"
             "Báo cáo sẽ được render thành HTML — bạn có thể dùng Mermaid diagram "
             "bằng cách dùng code block ```mermaid. Các trường hợp điển hình:\n"

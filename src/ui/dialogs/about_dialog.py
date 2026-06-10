@@ -106,7 +106,7 @@ class AboutDialog(QDialog):
             ("check", "Offline (miễn phí) hoặc AI (chất lượng cao) — tuỳ chọn"),
             ("check", "Giữ nguyên định dạng file gốc sau khi dịch"),
             ("check", "Tự động dùng ngữ cảnh từ kết quả tổng hợp"),
-            ("check", "Bảng thuật ngữ tùy chỉnh, import/export CSV"),
+            ("check", "Bảng thuật ngữ tùy chỉnh, cho phép import/export để chia sẻ giữa nhiều người"),
         ]
         for icon_name, text in features_translate:
             layout.addWidget(self._feature_row(icon_name, theme.GREEN, text))
@@ -148,7 +148,7 @@ class AboutDialog(QDialog):
 
         # --- Footer ---
         footer_row = QHBoxLayout()
-        copy_lbl = QLabel("© 2025 LazyDoc")
+        copy_lbl = QLabel("© 2026 LazyDoc")
         copy_lbl.setObjectName("aboutCopy")
         footer_row.addWidget(copy_lbl)
         footer_row.addStretch()
