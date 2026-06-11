@@ -55,6 +55,7 @@ class SummaryModule(QObject):
         self._worker: SummaryWorker | None = None
         self._output_dir = _get_downloads_dir()
         self._provider_manager = None
+        self._active_provider = None
 
     @property
     def is_running(self) -> bool:
@@ -98,7 +99,11 @@ class SummaryModule(QObject):
             )
             return
 
-        provider = self._provider_manager.provider
+        provider = self._provider_manager.get_provider("summary")
+        if not provider:
+            self.summary_completed.emit(False, "Không thể khởi tạo model tổng hợp.")
+            return
+        self._active_provider = provider
         logger.info(
             "Bắt đầu tổng hợp %d file với %s (%s)",
             len(contents), provider.name, provider.model,
@@ -137,8 +142,8 @@ class SummaryModule(QObject):
 
     def _on_cost_updated(self, input_tokens: int, output_tokens: int) -> None:
         """Forward cost update từ worker, kèm thông tin provider/model."""
-        if self._provider_manager and self._provider_manager.provider:
-            provider = self._provider_manager.provider
+        if self._active_provider:
+            provider = self._active_provider
             self.cost_updated.emit(
                 provider.name, provider.model,
                 input_tokens, output_tokens,
@@ -156,3 +161,4 @@ class SummaryModule(QObject):
         if self._worker:
             self._worker.deleteLater()
             self._worker = None
+        self._active_provider = None

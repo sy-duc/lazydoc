@@ -28,6 +28,7 @@ class QAModule(QObject):
         super().__init__(parent)
         self._worker: QAWorker | None = None
         self._provider_manager = None
+        self._active_provider = None
 
     @property
     def is_running(self) -> bool:
@@ -63,7 +64,11 @@ class QAModule(QObject):
             self.completed.emit(False, "Chưa cấu hình AI Provider.")
             return
 
-        provider = self._provider_manager.provider
+        provider = self._provider_manager.get_provider("qa")
+        if not provider:
+            self.completed.emit(False, "Không thể khởi tạo model hỏi đáp.")
+            return
+        self._active_provider = provider
         logger.info("Bắt đầu Q&A với %s (%s)", provider.name, provider.model)
 
         self._worker = QAWorker(
@@ -94,3 +99,4 @@ class QAModule(QObject):
         if self._worker:
             self._worker.deleteLater()
             self._worker = None
+        self._active_provider = None

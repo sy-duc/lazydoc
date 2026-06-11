@@ -6,6 +6,7 @@ import shutil
 import zipfile
 from pathlib import Path
 from typing import Callable
+from xml.sax.saxutils import escape as xml_escape
 
 from src.core.logging_config import safe_file_label
 from src.writers.base import FileWriter
@@ -137,7 +138,7 @@ class ExcelWriter(FileWriter):
             text = match.group(2)
             close_tag = match.group(3)
             if text.strip():
-                text = translate_fn(text)
+                text = xml_escape(translate_fn(text))
             return f"{open_tag}{text}{close_tag}"
 
         translated = pattern.sub(_replace_text, xml_str)
@@ -159,8 +160,8 @@ class ExcelWriter(FileWriter):
             suffix = match.group(3)
             if name.strip():
                 translated = translate_fn(name)
-                # Sanitize tên sheet
-                translated = re.sub(r'[\[\]*?/\\]', '', translated)
+                # Sanitize tên sheet (Excel và XML attribute đều không cho phép " hay \[]*?/\)
+                translated = re.sub(r'[\[\]*?/\\":]', '', translated)
                 translated = translated[:31].strip() or "Sheet"
                 return f"{prefix}{translated}{suffix}"
             return match.group(0)
@@ -201,7 +202,7 @@ class ExcelWriter(FileWriter):
                 close_t = t_match.group(3)
                 if text.strip():
                     has_changes = True
-                    text = translate_fn(text)
+                    text = xml_escape(translate_fn(text))
                 return f"{open_t}{text}{close_t}"
 
             new_inner = t_pattern.sub(_replace_t, inner)
@@ -236,7 +237,7 @@ class ExcelWriter(FileWriter):
             close_tag = match.group(3)
             if text.strip():
                 has_changes = True
-                text = translate_fn(text)
+                text = xml_escape(translate_fn(text))
             return f"{open_tag}{text}{close_tag}"
 
         translated = pattern.sub(_replace_text, xml_str)
@@ -267,7 +268,7 @@ class ExcelWriter(FileWriter):
     @staticmethod
     def _sanitize_sheet_name(name: str) -> str:
         """Chuẩn hóa tên sheet theo quy tắc Excel."""
-        name = re.sub(r'[\[\]*?/\\]', '', name)
+        name = re.sub(r'[\[\]*?/\\":]', '', name)
         name = name[:31].strip()
         return name if name else "Sheet"
 

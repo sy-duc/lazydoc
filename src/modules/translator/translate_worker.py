@@ -398,9 +398,25 @@ class TranslateWorker(QThread):
 
     @staticmethod
     def _sanitize_filename(name: str) -> str:
-        """Loại bỏ ký tự không hợp lệ trong tên file."""
-        sanitized = re.sub(r'[<>:"/\\|?*]', '', name)
-        sanitized = sanitized.strip()
+        """Chuẩn hóa tên file theo các giới hạn phổ biến của Windows."""
+        # Đổi control characters (bao gồm newline, carriage return và tab)
+        # thành khoảng trắng, rồi loại các ký tự Windows không cho phép.
+        sanitized = re.sub(r'[\x00-\x1f]', ' ', name)
+        sanitized = re.sub(r'[<>:"/\\|?*]', '', sanitized)
+        sanitized = re.sub(r'\s+', ' ', sanitized)
+        sanitized = sanitized.strip().rstrip(". ")
+
+        # Windows dành riêng các device name, kể cả khi có phần mở rộng.
+        reserved = {
+            "CON", "PRN", "AUX", "NUL",
+            *(f"COM{i}" for i in range(1, 10)),
+            *(f"LPT{i}" for i in range(1, 10)),
+        }
+        if sanitized.split(".", 1)[0].upper() in reserved:
+            sanitized = f"translated_{sanitized}"
+
+        # Chừa khoảng trống cho extension và hậu tố chống trùng tên.
+        sanitized = sanitized[:180].rstrip(". ")
         if not sanitized:
             sanitized = "translated"
         return sanitized

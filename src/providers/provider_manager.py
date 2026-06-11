@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from PySide6.QtCore import QObject, Signal
 
+from src.core.config import ConfigManager
 from src.core.database import DatabaseManager
 from src.core.encryption import EncryptionManager
 from src.core.logging_config import sanitize_error
@@ -12,6 +13,7 @@ from src.providers.base import BaseProvider
 from src.providers.claude_provider import ClaudeProvider
 from src.providers.gemini_provider import GeminiProvider
 from src.providers.openai_provider import OpenAIProvider
+from src.providers.task_provider import TaskProvider
 from src.providers.token_counter import TokenCounter
 
 logger = logging.getLogger(__name__)
@@ -46,9 +48,12 @@ class ProviderManager(QObject):
         super().__init__(parent)
         self._db = DatabaseManager()
         self._encryption = EncryptionManager()
+        self._config = ConfigManager()
         self._token_counter = TokenCounter(self)
         self._current_provider: BaseProvider | None = None
         self._current_provider_name: str = ""
+        self._api_key: str = ""
+        self._task_providers: dict[str, BaseProvider] = {}
 
     @property
     def provider(self) -> BaseProvider | None:
@@ -64,6 +69,48 @@ class ProviderManager(QObject):
     def token_counter(self) -> TokenCounter:
         """TokenCounter để theo dõi chi phí."""
         return self._token_counter
+
+    def get_provider(self, task: str) -> BaseProvider | None:
+        """Lấy provider dùng model được cấu hình riêng cho từng tác vụ."""
+        if not self._current_provider_name or not self._api_key:
+            return None
+
+        normalized_task = "summary" if task in ("summary", "qa") else "translate"
+        cached = self._task_providers.get(normalized_task)
+        if cached:
+            return cached
+
+        provider_name = self._current_provider_name
+        provider_cls = PROVIDER_CLASSES.get(provider_name)
+        if not provider_cls:
+            return None
+
+        policy_path = f"model_policy.{provider_name}.{normalized_task}"
+        primary = self._config.get(f"{policy_path}.primary")
+        fallback = self._config.get(f"{policy_path}.fallback")
+
+        if not primary:
+            logger.warning(
+                "Thiếu model policy cho %s/%s; dùng provider hiện tại.",
+                provider_name,
+                normalized_task,
+            )
+            return self._current_provider
+
+        provider = TaskProvider(
+            provider_factory=lambda model: provider_cls(self._api_key, model=model),
+            primary_model=primary,
+            fallback_model=fallback,
+        )
+        self._task_providers[normalized_task] = provider
+        logger.info(
+            "Model policy %s/%s: primary=%s, fallback=%s",
+            provider_name,
+            normalized_task,
+            primary,
+            fallback or "none",
+        )
+        return provider
 
     def load_active_provider(self) -> bool:
         """Load provider đang active từ database.
@@ -87,6 +134,8 @@ class ProviderManager(QObject):
             logger.info("Provider '%s' chưa có API key.", provider_name)
             self._current_provider_name = provider_name
             self._current_provider = None
+            self._api_key = ""
+            self._task_providers = {}
             return False
 
         return self._init_provider(provider_name, api_key_enc)
@@ -152,7 +201,14 @@ class ProviderManager(QObject):
             return False
 
         try:
-            temp_provider = provider_cls(api_key)
+            model = self._config.get(
+                f"model_policy.{provider_name}.translate.primary"
+            )
+            temp_provider = (
+                provider_cls(api_key, model=model)
+                if model
+                else provider_cls(api_key)
+            )
             is_valid = temp_provider.validate_key()
 
             if is_valid:
@@ -202,8 +258,12 @@ class ProviderManager(QObject):
 
         try:
             api_key = self._encryption.decrypt(api_key_enc)
-            self._current_provider = provider_cls(api_key)
+            self._api_key = api_key
+            self._task_providers = {}
             self._current_provider_name = provider_name
+            self._current_provider = self.get_provider("translate")
+            if not self._current_provider:
+                raise RuntimeError("Không thể khởi tạo provider theo model policy.")
             logger.info("Đã khởi tạo provider: %s (model: %s)",
                         provider_name, self._current_provider.model)
             return True
@@ -215,4 +275,6 @@ class ProviderManager(QObject):
             )
             self._current_provider = None
             self._current_provider_name = provider_name
+            self._api_key = ""
+            self._task_providers = {}
             return False

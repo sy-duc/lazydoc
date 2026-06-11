@@ -313,6 +313,8 @@ class AIEngine:
         for i, text in enumerate(texts, 1):
             # Thay newline bằng dấu đặc biệt để giữ trên 1 dòng logic
             safe_text = text.replace("\n", " ↵ ")
+            # Escape delimiter trong nội dung để AI không nhầm với marker batch
+            safe_text = safe_text.replace(_ITEM_PREFIX, "〚").replace(_ITEM_SUFFIX, "〛")
             numbered_lines.append(f"{_ITEM_PREFIX}{i}{_ITEM_SUFFIX} {safe_text}")
         content = "\n".join(numbered_lines)
 
@@ -346,8 +348,9 @@ class AIEngine:
         for i, text in enumerate(texts):
             translated = parsed.get(i + 1)
             if translated:
-                # Khôi phục newline
+                # Khôi phục newline và delimiter gốc
                 translated = translated.replace(" ↵ ", "\n")
+                translated = translated.replace("〚", _ITEM_PREFIX).replace("〛", _ITEM_SUFFIX)
                 results.append(translated)
             else:
                 logger.warning("Batch item %d không có trong response, giữ nguyên.", i + 1)
@@ -370,7 +373,10 @@ class AIEngine:
 
         # Regex match ⟦N⟧ text
         pattern = re.compile(
-            rf"{re.escape(_ITEM_PREFIX)}(\d+){re.escape(_ITEM_SUFFIX)}\s*(.*?)(?=\n{re.escape(_ITEM_PREFIX)}\d+{re.escape(_ITEM_SUFFIX)}|\Z)",
+            rf"(?m)^[ \t]*{re.escape(_ITEM_PREFIX)}(\d+)"
+            rf"{re.escape(_ITEM_SUFFIX)}[ \t]*(.*?)"
+            rf"(?=^[ \t]*{re.escape(_ITEM_PREFIX)}\d+"
+            rf"{re.escape(_ITEM_SUFFIX)}|\Z)",
             re.DOTALL,
         )
 
