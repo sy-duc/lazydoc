@@ -122,7 +122,7 @@ class TestExtractWorker:
         files = []
         for i in range(5):
             f = tmp_path / f"test_{i}.txt"
-            f.write_text(f"Nội dung {i}")
+            f.write_text(f"Nội dung {i}", encoding="utf-8")
             files.append(f)
 
         started_files: list[Path] = []

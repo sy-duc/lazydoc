@@ -18,7 +18,7 @@ class TestGeminiProvider:
         provider = GeminiProvider(api_key="test-key")
         mock_client_cls.assert_called_once_with(api_key="test-key")
         assert provider.name == "gemini"
-        assert provider.model == "gemini-1.5-flash"
+        assert provider.model == "gemini-2.5-flash"
 
     @patch("src.providers.gemini_provider.genai.Client")
     def test_custom_model(self, mock_client_cls) -> None:
@@ -32,8 +32,8 @@ class TestGeminiProvider:
         from src.providers.gemini_provider import GeminiProvider
 
         provider = GeminiProvider(api_key="key")
-        assert "gemini-1.5-flash" in provider.supported_models
-        assert "gemini-1.5-pro" in provider.supported_models
+        assert "gemini-2.5-flash" in provider.supported_models
+        assert "gemini-2.5-pro" in provider.supported_models
 
     @patch("src.providers.gemini_provider.genai.Client")
     def test_summarize_streaming(self, mock_client_cls) -> None:

@@ -23,7 +23,7 @@ def test_load_english() -> None:
     """Load ngôn ngữ tiếng Anh."""
     i18n = I18nManager(language="en")
     assert i18n.current_language == "en"
-    assert i18n.t("app.title") == "LazyDoc — Document Blender"
+    assert i18n.t("app.title") == "LazyDoc"
 
 
 def test_missing_key_returns_key() -> None:
