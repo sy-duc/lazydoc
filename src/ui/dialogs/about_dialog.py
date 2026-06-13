@@ -21,16 +21,11 @@ APP_VERSION = "1.0.0"
 RELEASE_DATE = "13/06/2026"
 
 _FORMATS = "DOCX · XLSX · PPTX · TXT · MD · CSV · PNG · JPG · BMP · GIF"
-_RELEASE_NOTES = {
-    "Tính năng mới": [
-        "Thêm hướng dẫn bổ sung cho bản dịch AI, hỗ trợ các yêu cầu và ràng buộc riêng.",
-        "Thêm tab Có gì mới để theo dõi nội dung của phiên bản hiện tại.",
-    ],
-    "Cải tiến": [
-        "Tách rõ lĩnh vực, văn phong, ngữ cảnh tổng hợp và yêu cầu đầu ra trong prompt dịch.",
-        "Bổ sung gợi ý nhập cho các quy tắc như giữ nguyên tên field, API và định dạng tiêu đề.",
-    ],
-}
+RELEASE_SUMMARY = (
+    "Đây là phiên bản đầu tiên của LazyDoc. Các tính năng mới, cải tiến, "
+    "hiệu chỉnh và lỗi đã sửa trong những phiên bản tiếp theo sẽ được mô tả "
+    "tại tab này."
+)
 
 
 class AboutDialog(QDialog):
@@ -177,15 +172,10 @@ class AboutDialog(QDialog):
         tab_layout.addWidget(release_date)
         tab_layout.addSpacing(8)
 
-        for section, notes in _RELEASE_NOTES.items():
-            tab_layout.addWidget(self._section_title(
-                "star-outline" if section == "Tính năng mới" else "cog-outline",
-                theme.MAUVE if section == "Tính năng mới" else theme.BLUE,
-                section,
-            ))
-            for note in notes:
-                tab_layout.addWidget(self._feature_row("check", theme.GREEN, note))
-            tab_layout.addSpacing(8)
+        release_summary = QLabel(RELEASE_SUMMARY)
+        release_summary.setObjectName("releaseSummary")
+        release_summary.setWordWrap(True)
+        tab_layout.addWidget(release_summary)
 
         tab_layout.addStretch()
         scroll.setWidget(content)
@@ -293,6 +283,10 @@ class AboutDialog(QDialog):
             }}
             #releaseDate {{
                 color: {theme.SUBTEXT_0};
+                font-size: {theme.FONT_SM}px;
+            }}
+            #releaseSummary {{
+                color: {theme.SUBTEXT_1};
                 font-size: {theme.FONT_SM}px;
             }}
             #aboutSep {{

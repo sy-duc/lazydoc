@@ -48,6 +48,14 @@ class TestTranslateDialogLogic:
         assert "concise" in STYLES
         assert "literary" in STYLES
 
+    def test_additional_instructions_length_is_compact(self) -> None:
+        """Textbox hướng dẫn có giới hạn phù hợp cho nội dung ngắn."""
+        from src.ui.dialogs.translate_dialog import (
+            MAX_TRANSLATION_INSTRUCTIONS_LENGTH,
+        )
+
+        assert MAX_TRANSLATION_INSTRUCTIONS_LENGTH == 300
+
     def test_i18n_keys_exist_vi(self) -> None:
         """Kiểm tra tất cả i18n keys cho translate dialog tồn tại (tiếng Việt)."""
         i18n = I18nManager(language="vi")
@@ -77,7 +85,6 @@ class TestTranslateDialogLogic:
             "translate.style_literary",
             "translate.additional_instructions",
             "translate.additional_instructions_description",
-            "translate.additional_instructions_placeholder",
         ]
         for key in keys:
             value = i18n.t(key)
@@ -101,7 +108,6 @@ class TestTranslateDialogLogic:
             "translate.no_files",
             "translate.additional_instructions",
             "translate.additional_instructions_description",
-            "translate.additional_instructions_placeholder",
         ]
         for key in keys:
             value = i18n.t(key)

@@ -62,7 +62,6 @@
     "style_literary": "Bay bổng",
     "additional_instructions": "Hướng dẫn bổ sung",
     "additional_instructions_description": "Nêu các yêu cầu hoặc ràng buộc cụ thể mà bản dịch và tài liệu đầu ra cần tuân theo.",
-    "additional_instructions_placeholder": "Ví dụ: Giữ nguyên tên bảng và field trong database; không dịch tên API; giữ nguyên định dạng tiêu đề; sử dụng thuật ngữ nhất quán trong toàn bộ tài liệu.",
     "mode": "Chế độ dịch",
     "mode_default": "Mặc định (offline)",
     "mode_smart": "Thông minh (AI)",
