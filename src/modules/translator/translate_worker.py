@@ -52,6 +52,7 @@ class TranslateWorker(QThread):
         domain: str | None = None,
         style: str | None = None,
         context: str | None = None,
+        translation_instructions: str | None = None,
         parent: object = None,
     ) -> None:
         """Khởi tạo TranslateWorker.
@@ -66,6 +67,7 @@ class TranslateWorker(QThread):
             domain: Lĩnh vực dịch thuật (tuỳ chọn, chỉ cho smart mode).
             style: Văn phong dịch thuật (tuỳ chọn, chỉ cho smart mode).
             context: Ngữ cảnh từ kết quả tổng hợp (tuỳ chọn, chỉ cho smart mode).
+            translation_instructions: Yêu cầu/ràng buộc dịch bổ sung.
             parent: QObject cha.
         """
         super().__init__(parent)
@@ -79,6 +81,7 @@ class TranslateWorker(QThread):
         self._domain = domain
         self._style = style
         self._context = context
+        self._translation_instructions = translation_instructions
         self._cancelled = False
 
     def run(self) -> None:
@@ -162,6 +165,7 @@ class TranslateWorker(QThread):
             domain=self._domain,
             style=self._style,
             context=context,
+            translation_instructions=self._translation_instructions,
             glossary=glossary,
         )
         ai_engine.set_usage_callback(self._on_ai_usage)

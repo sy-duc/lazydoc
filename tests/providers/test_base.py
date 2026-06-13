@@ -27,9 +27,11 @@ class MockProvider(BaseProvider):
         yield StreamChunk(text=f"Summary: {content[:20]}", is_final=True)
 
     def translate(self, content, target_lang, source_lang=None,
-                  domain=None, style=None, context=None, glossary=None):
+                  domain=None, style=None, context=None,
+                  glossary=None, translation_instructions=None):
         sys_p, user_p = self._build_translate_prompt(
-            content, target_lang, source_lang, domain, style, context, glossary
+            content, target_lang, source_lang, domain, style, context,
+            glossary, translation_instructions
         )
         yield StreamChunk(text=f"Translated: {content[:20]}", is_final=True)
 
@@ -160,6 +162,16 @@ class TestBuildTranslatePrompt:
             "Content", "ja", context="Báo cáo tài chính Q3"
         )
         assert "Báo cáo tài chính Q3" in sys_p
+
+    def test_with_translation_instructions(self) -> None:
+        provider = MockProvider(api_key="key")
+        sys_p, _ = provider._build_translate_prompt(
+            "Content",
+            "vi",
+            translation_instructions="Giữ nguyên tên field trong database.",
+        )
+        assert "Hướng dẫn dịch bổ sung" in sys_p
+        assert "Giữ nguyên tên field trong database." in sys_p
 
     def test_default_domain_ignored(self) -> None:
         provider = MockProvider(api_key="key")

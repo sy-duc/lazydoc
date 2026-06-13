@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 
 from PySide6.QtCore import QRect, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QTextCursor
 from PySide6.QtWidgets import (
     QButtonGroup,
     QComboBox,
@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QLayout,
     QLayoutItem,
     QPushButton,
+    QPlainTextEdit,
     QRadioButton,
     QScrollArea,
     QVBoxLayout,
@@ -51,6 +52,8 @@ STYLES = [
     "concise",
     "literary",
 ]
+
+MAX_TRANSLATION_INSTRUCTIONS_LENGTH = 1000
 
 
 class FlowLayout(QLayout):
@@ -347,6 +350,31 @@ class TranslateDialog(QDialog):
             style_flow.addWidget(radio)
         expand_layout.addWidget(self._style_container)
 
+        # Hướng dẫn/ràng buộc bổ sung cho AI
+        self._instructions_label = QLabel(
+            self._i18n.t("translate.additional_instructions")
+        )
+        self._instructions_label.setObjectName("sectionLabel")
+        expand_layout.addWidget(self._instructions_label)
+
+        self._instructions_description = QLabel(
+            self._i18n.t("translate.additional_instructions_description")
+        )
+        self._instructions_description.setObjectName("fieldDescription")
+        self._instructions_description.setWordWrap(True)
+        expand_layout.addWidget(self._instructions_description)
+
+        self._instructions_edit = QPlainTextEdit()
+        self._instructions_edit.setObjectName("instructionsEdit")
+        self._instructions_edit.setPlaceholderText(
+            self._i18n.t("translate.additional_instructions_placeholder")
+        )
+        self._instructions_edit.setFixedHeight(82)
+        self._instructions_edit.textChanged.connect(
+            self._limit_translation_instructions
+        )
+        expand_layout.addWidget(self._instructions_edit)
+
         self._mode_group.buttonToggled.connect(
             lambda _button, checked: checked and self._update_smart_options_state()
         )
@@ -477,6 +505,23 @@ class TranslateDialog(QDialog):
                 border-color: {theme.BLUE};
             }}
             #optionRadio:disabled {{ color: {theme.MUTED}; }}
+            #fieldDescription {{
+                color: {theme.MUTED};
+                font-size: 11px;
+            }}
+            #instructionsEdit {{
+                background-color: {theme.SURFACE_0};
+                color: {theme.TEXT};
+                border: 1px solid {theme.SURFACE_1};
+                border-radius: {theme.RADIUS_SM}px;
+                padding: 6px 8px;
+                font-size: {theme.FONT_SM}px;
+            }}
+            #instructionsEdit:focus {{ border-color: {theme.BLUE}; }}
+            #instructionsEdit:disabled {{
+                color: {theme.MUTED};
+                background-color: {theme.BG_MANTLE};
+            }}
             #expandArea {{
                 background-color: {theme.BG_MANTLE};
                 border: 1px solid {theme.SURFACE_0};
@@ -592,6 +637,7 @@ class TranslateDialog(QDialog):
             "mode": self._mode_group.checkedButton().property("option_value"),
             "domain": self._domain_group.checkedButton().property("option_value"),
             "style": self._style_group.checkedButton().property("option_value"),
+            "translation_instructions": self._instructions_edit.toPlainText().strip(),
         }
         # Không set processing ở đây — caller (main_window) sẽ gọi set_translating()
         # sau khi người dùng xác nhận chi phí.
@@ -621,6 +667,23 @@ class TranslateDialog(QDialog):
         self._domain_container.setEnabled(smart_enabled)
         self._style_label.setEnabled(smart_enabled)
         self._style_container.setEnabled(smart_enabled)
+        self._instructions_label.setEnabled(smart_enabled)
+        self._instructions_description.setEnabled(smart_enabled)
+        self._instructions_edit.setEnabled(smart_enabled)
+
+    def _limit_translation_instructions(self) -> None:
+        """Giới hạn độ dài hướng dẫn bổ sung để tránh prompt quá lớn."""
+        text = self._instructions_edit.toPlainText()
+        if len(text) <= MAX_TRANSLATION_INSTRUCTIONS_LENGTH:
+            return
+        self._instructions_edit.blockSignals(True)
+        self._instructions_edit.setPlainText(
+            text[:MAX_TRANSLATION_INSTRUCTIONS_LENGTH]
+        )
+        cursor = self._instructions_edit.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        self._instructions_edit.setTextCursor(cursor)
+        self._instructions_edit.blockSignals(False)
 
     def _set_processing(self, processing: bool) -> None:
         """Chuyển đổi trạng thái xử lý.

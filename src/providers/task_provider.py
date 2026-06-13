@@ -89,6 +89,7 @@ class TaskProvider(BaseProvider):
         style: str | None = None,
         context: str | None = None,
         glossary: dict[str, str] | None = None,
+        translation_instructions: str | None = None,
     ) -> Generator[StreamChunk, None, None]:
         yield from self._call_with_fallback(
             "translate",
@@ -99,6 +100,7 @@ class TaskProvider(BaseProvider):
             style,
             context,
             glossary,
+            translation_instructions,
         )
 
     def describe_image(

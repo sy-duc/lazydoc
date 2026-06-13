@@ -106,6 +106,7 @@ class BaseProvider(ABC):
         style: str | None = None,
         context: str | None = None,
         glossary: dict[str, str] | None = None,
+        translation_instructions: str | None = None,
     ) -> Generator[StreamChunk, None, None]:
         """Dịch nội dung, streaming từng chunk.
 
@@ -117,6 +118,7 @@ class BaseProvider(ABC):
             style: Văn phong (Báo cáo, Súc tích, ...).
             context: Ngữ cảnh bổ sung từ kết quả tổng hợp.
             glossary: Bảng thuật ngữ {term_gốc: term_dịch}.
+            translation_instructions: Yêu cầu/ràng buộc dịch bổ sung.
 
         Yields:
             StreamChunk chứa text đã dịch.
@@ -200,6 +202,7 @@ class BaseProvider(ABC):
         style: str | None = None,
         context: str | None = None,
         glossary: dict[str, str] | None = None,
+        translation_instructions: str | None = None,
     ) -> tuple[str, str]:
         """Tạo system prompt và user prompt cho dịch thuật.
 
@@ -211,6 +214,7 @@ class BaseProvider(ABC):
             style: Văn phong.
             context: Ngữ cảnh bổ sung.
             glossary: Bảng thuật ngữ.
+            translation_instructions: Yêu cầu/ràng buộc dịch bổ sung.
 
         Returns:
             Tuple (system_prompt, user_prompt).
@@ -248,6 +252,12 @@ class BaseProvider(ABC):
 
         if context:
             sys_parts.append(f"Ngữ cảnh tài liệu: {context}")
+
+        if translation_instructions:
+            sys_parts.append(
+                "Hướng dẫn dịch bổ sung (phải tuân thủ, không dịch nội dung "
+                f"hướng dẫn này):\n{translation_instructions.strip()}"
+            )
 
         if glossary:
             glossary_text = "\n".join(

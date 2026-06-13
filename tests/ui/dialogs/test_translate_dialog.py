@@ -75,6 +75,9 @@ class TestTranslateDialogLogic:
             "translate.style_report",
             "translate.style_concise",
             "translate.style_literary",
+            "translate.additional_instructions",
+            "translate.additional_instructions_description",
+            "translate.additional_instructions_placeholder",
         ]
         for key in keys:
             value = i18n.t(key)
@@ -96,6 +99,9 @@ class TestTranslateDialogLogic:
             "translate.style",
             "translate.mode",
             "translate.no_files",
+            "translate.additional_instructions",
+            "translate.additional_instructions_description",
+            "translate.additional_instructions_placeholder",
         ]
         for key in keys:
             value = i18n.t(key)

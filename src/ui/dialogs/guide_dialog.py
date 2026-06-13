@@ -161,6 +161,7 @@ thuật ngữ chuyên ngành nhất quán hơn.</p>
 <ul style="padding-left:20px; margin-top:4px;">
   <li style="margin-bottom:4px;"><b>Lĩnh vực</b>: IT, Y tế, Pháp lý, Tài chính… → AI dùng văn phong đúng ngành</li>
   <li style="margin-bottom:4px;"><b>Văn phong</b>: Báo cáo, Ngắn gọn, Văn học… → điều chỉnh tone dịch</li>
+  <li style="margin-bottom:4px;"><b>Hướng dẫn bổ sung</b>: nêu các ràng buộc riêng như giữ nguyên tên field, API hoặc định dạng đầu ra</li>
 </ul>
 """)
 

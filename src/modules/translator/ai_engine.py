@@ -56,6 +56,7 @@ class AIEngine:
         style: str | None = None,
         context: str | None = None,
         glossary: dict[str, str] | None = None,
+        translation_instructions: str | None = None,
     ) -> None:
         """Khởi tạo AIEngine.
 
@@ -67,6 +68,7 @@ class AIEngine:
             style: Văn phong (Báo cáo, Súc tích, ...).
             context: Ngữ cảnh bổ sung từ kết quả tổng hợp.
             glossary: Bảng thuật ngữ {term_gốc: term_dịch}.
+            translation_instructions: Yêu cầu/ràng buộc dịch bổ sung.
         """
         self._provider = provider
         self._target_lang = target_lang
@@ -74,6 +76,7 @@ class AIEngine:
         self._domain = domain
         self._style = style
         self._context = context
+        self._translation_instructions = translation_instructions
         self._glossary = glossary
 
         # State cho collect/lookup
@@ -285,6 +288,7 @@ class AIEngine:
                 domain=self._domain,
                 style=self._style,
                 context=self._context,
+                translation_instructions=self._translation_instructions,
                 glossary=self._glossary,
             )
         )
@@ -334,6 +338,7 @@ class AIEngine:
                 domain=self._domain,
                 style=self._style,
                 context=self._context,
+                translation_instructions=self._translation_instructions,
                 glossary=self._glossary,
             )
         )

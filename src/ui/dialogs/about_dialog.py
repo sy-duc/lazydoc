@@ -1,13 +1,16 @@
 """AboutDialog — Thông tin ứng dụng LazyDoc."""
 
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QDialog,
+    QFrame,
     QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -15,8 +18,19 @@ from PySide6.QtWidgets import (
 from src.ui import theme
 
 APP_VERSION = "1.0.0"
+RELEASE_DATE = "13/06/2026"
 
 _FORMATS = "DOCX · XLSX · PPTX · TXT · MD · CSV · PNG · JPG · BMP · GIF"
+_RELEASE_NOTES = {
+    "Tính năng mới": [
+        "Thêm hướng dẫn bổ sung cho bản dịch AI, hỗ trợ các yêu cầu và ràng buộc riêng.",
+        "Thêm tab Có gì mới để theo dõi nội dung của phiên bản hiện tại.",
+    ],
+    "Cải tiến": [
+        "Tách rõ lĩnh vực, văn phong, ngữ cảnh tổng hợp và yêu cầu đầu ra trong prompt dịch.",
+        "Bổ sung gợi ý nhập cho các quy tắc như giữ nguyên tên field, API và định dạng tiêu đề.",
+    ],
+}
 
 
 class AboutDialog(QDialog):
@@ -55,9 +69,8 @@ class AboutDialog(QDialog):
 
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(28, 24, 28, 24)
-        layout.setSpacing(0)
+        layout.setSpacing(12)
 
-        # --- App name + version ---
         name_row = QHBoxLayout()
         name_lbl = QLabel("LazyDoc")
         name_lbl.setObjectName("aboutAppName")
@@ -72,81 +85,13 @@ class AboutDialog(QDialog):
         desc.setObjectName("aboutDesc")
         desc.setWordWrap(True)
         layout.addWidget(desc)
-        layout.addSpacing(20)
 
-        # --- Separator ---
-        layout.addWidget(self._sep())
+        self._tabs = QTabWidget()
+        self._tabs.setObjectName("aboutTabs")
+        self._tabs.addTab(self._build_info_tab(), "Thông tin")
+        self._tabs.addTab(self._build_whats_new_tab(), "Có gì mới")
+        layout.addWidget(self._tabs, stretch=1)
 
-        # --- Tính năng: Tổng hợp ---
-        layout.addSpacing(16)
-        layout.addWidget(self._section_title(
-            "file-document-multiple-outline", theme.MAUVE, "Tổng hợp thông minh"
-        ))
-        layout.addSpacing(8)
-        features_summary = [
-            ("check", "Phân tích đa định dạng trong cùng một lần xử lý"),
-            ("check", "Trích xuất thông tin quan trọng, tóm tắt có cấu trúc"),
-            ("check", "Báo cáo chi tiết dạng HTML có thể tải về"),
-            ("check", "Hỏi đáp (Q&A) ngay trên nội dung vừa tổng hợp"),
-        ]
-        for icon_name, text in features_summary:
-            layout.addWidget(self._feature_row(icon_name, theme.GREEN, text))
-        layout.addSpacing(16)
-
-        # --- Separator ---
-        layout.addWidget(self._sep())
-
-        # --- Tính năng: Dịch thuật ---
-        layout.addSpacing(16)
-        layout.addWidget(self._section_title(
-            "translate", theme.BLUE, "Dịch thuật linh hoạt"
-        ))
-        layout.addSpacing(8)
-        features_translate = [
-            ("check", "Offline (miễn phí) hoặc AI (chất lượng cao) — tuỳ chọn"),
-            ("check", "Giữ nguyên định dạng file gốc sau khi dịch"),
-            ("check", "Tự động dùng ngữ cảnh từ kết quả tổng hợp"),
-            ("check", "Bảng thuật ngữ tùy chỉnh, cho phép import/export để chia sẻ giữa nhiều người"),
-        ]
-        for icon_name, text in features_translate:
-            layout.addWidget(self._feature_row(icon_name, theme.GREEN, text))
-        layout.addSpacing(20)
-
-        # --- Separator ---
-        layout.addWidget(self._sep())
-        layout.addSpacing(14)
-
-        # --- Provider + formats ---
-        provider_row = QHBoxLayout()
-        provider_row.setSpacing(8)
-        provider_icon = QLabel()
-        provider_icon.setPixmap(theme.pixmap("lightning-bolt", theme.YELLOW, 14))
-        provider_row.addWidget(provider_icon)
-        provider_lbl = QLabel("AI đề xuất sử dụng:")
-        provider_lbl.setObjectName("aboutMeta")
-        provider_row.addWidget(provider_lbl)
-        provider_val = QLabel(self._active_provider.capitalize())
-        provider_val.setObjectName("aboutMetaVal")
-        provider_row.addWidget(provider_val)
-        provider_row.addStretch()
-        layout.addLayout(provider_row)
-
-        layout.addSpacing(6)
-        formats_row = QHBoxLayout()
-        formats_row.setSpacing(8)
-        fmt_icon = QLabel()
-        fmt_icon.setPixmap(theme.pixmap("file-multiple-outline", theme.SUBTEXT_0, 14))
-        formats_row.addWidget(fmt_icon)
-        fmt_lbl = QLabel(_FORMATS)
-        fmt_lbl.setObjectName("aboutFormats")
-        fmt_lbl.setWordWrap(True)
-        formats_row.addWidget(fmt_lbl, stretch=1)
-        layout.addLayout(formats_row)
-
-        layout.addStretch()
-        layout.addSpacing(14)
-
-        # --- Footer ---
         footer_row = QHBoxLayout()
         copy_lbl = QLabel("© 2026 LazyDoc")
         copy_lbl.setObjectName("aboutCopy")
@@ -158,6 +103,101 @@ class AboutDialog(QDialog):
         ok_btn.clicked.connect(self.accept)
         footer_row.addWidget(ok_btn)
         layout.addLayout(footer_row)
+
+    def _build_info_tab(self) -> QScrollArea:
+        scroll = self._make_scroll_area()
+        content = QWidget()
+        content.setObjectName("aboutTabContent")
+        tab_layout = QVBoxLayout(content)
+        tab_layout.setContentsMargins(4, 14, 8, 8)
+        tab_layout.setSpacing(8)
+
+        tab_layout.addWidget(self._section_title(
+            "file-document-multiple-outline", theme.MAUVE, "Tổng hợp thông minh"
+        ))
+        for text in (
+            "Phân tích đa định dạng trong cùng một lần xử lý",
+            "Trích xuất thông tin quan trọng, tóm tắt có cấu trúc",
+            "Báo cáo chi tiết dạng HTML có thể tải về",
+            "Hỏi đáp (Q&A) ngay trên nội dung vừa tổng hợp",
+        ):
+            tab_layout.addWidget(self._feature_row("check", theme.GREEN, text))
+
+        tab_layout.addSpacing(8)
+        tab_layout.addWidget(self._sep())
+        tab_layout.addSpacing(8)
+        tab_layout.addWidget(self._section_title(
+            "translate", theme.BLUE, "Dịch thuật linh hoạt"
+        ))
+        for text in (
+            "Offline (miễn phí) hoặc AI (chất lượng cao) - tùy chọn",
+            "Giữ nguyên định dạng file gốc sau khi dịch",
+            "Tự động dùng ngữ cảnh từ kết quả tổng hợp",
+            "Bảng thuật ngữ tùy chỉnh, hỗ trợ import/export",
+        ):
+            tab_layout.addWidget(self._feature_row("check", theme.GREEN, text))
+
+        tab_layout.addSpacing(8)
+        tab_layout.addWidget(self._sep())
+        tab_layout.addSpacing(8)
+        provider_row = QHBoxLayout()
+        provider_icon = QLabel()
+        provider_icon.setPixmap(theme.pixmap("lightning-bolt", theme.YELLOW, 14))
+        provider_row.addWidget(provider_icon)
+        provider_lbl = QLabel("AI đề xuất sử dụng:")
+        provider_lbl.setObjectName("aboutMeta")
+        provider_row.addWidget(provider_lbl)
+        provider_val = QLabel(self._active_provider.capitalize())
+        provider_val.setObjectName("aboutMetaVal")
+        provider_row.addWidget(provider_val)
+        provider_row.addStretch()
+        tab_layout.addLayout(provider_row)
+
+        fmt_lbl = QLabel(_FORMATS)
+        fmt_lbl.setObjectName("aboutFormats")
+        fmt_lbl.setWordWrap(True)
+        tab_layout.addWidget(fmt_lbl)
+        tab_layout.addStretch()
+        scroll.setWidget(content)
+        return scroll
+
+    def _build_whats_new_tab(self) -> QScrollArea:
+        scroll = self._make_scroll_area()
+        content = QWidget()
+        content.setObjectName("aboutTabContent")
+        tab_layout = QVBoxLayout(content)
+        tab_layout.setContentsMargins(4, 14, 8, 8)
+        tab_layout.setSpacing(8)
+
+        release_title = QLabel(f"Phiên bản v{APP_VERSION}")
+        release_title.setObjectName("releaseTitle")
+        tab_layout.addWidget(release_title)
+        release_date = QLabel(f"Ngày phát hành: {RELEASE_DATE}")
+        release_date.setObjectName("releaseDate")
+        tab_layout.addWidget(release_date)
+        tab_layout.addSpacing(8)
+
+        for section, notes in _RELEASE_NOTES.items():
+            tab_layout.addWidget(self._section_title(
+                "star-outline" if section == "Tính năng mới" else "cog-outline",
+                theme.MAUVE if section == "Tính năng mới" else theme.BLUE,
+                section,
+            ))
+            for note in notes:
+                tab_layout.addWidget(self._feature_row("check", theme.GREEN, note))
+            tab_layout.addSpacing(8)
+
+        tab_layout.addStretch()
+        scroll.setWidget(content)
+        return scroll
+
+    @staticmethod
+    def _make_scroll_area() -> QScrollArea:
+        scroll = QScrollArea()
+        scroll.setObjectName("aboutScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        return scroll
 
     def _sep(self) -> QWidget:
         w = QWidget()
@@ -219,6 +259,41 @@ class AboutDialog(QDialog):
                 color: {theme.SUBTEXT_0};
                 font-size: {theme.FONT_SM}px;
                 margin-top: 4px;
+            }}
+            #aboutTabs {{
+                background: transparent;
+                border: none;
+            }}
+            #aboutTabs::pane {{
+                border: none;
+                border-top: 1px solid {theme.SURFACE_0};
+                background: transparent;
+            }}
+            #aboutTabs QTabBar::tab {{
+                background: transparent;
+                color: {theme.SUBTEXT_0};
+                padding: 8px 18px;
+                border: none;
+                border-bottom: 2px solid transparent;
+            }}
+            #aboutTabs QTabBar::tab:selected {{
+                color: {theme.MAUVE};
+                border-bottom-color: {theme.MAUVE};
+                font-weight: bold;
+            }}
+            #aboutTabs QTabBar::tab:hover:!selected {{ color: {theme.TEXT}; }}
+            #aboutScroll, #aboutTabContent {{
+                background: transparent;
+                border: none;
+            }}
+            #releaseTitle {{
+                color: {theme.TEXT};
+                font-size: {theme.FONT_MD}px;
+                font-weight: bold;
+            }}
+            #releaseDate {{
+                color: {theme.SUBTEXT_0};
+                font-size: {theme.FONT_SM}px;
             }}
             #aboutSep {{
                 background-color: {theme.SURFACE_0};

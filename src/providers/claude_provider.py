@@ -116,10 +116,12 @@ class ClaudeProvider(BaseProvider):
         style: str | None = None,
         context: str | None = None,
         glossary: dict[str, str] | None = None,
+        translation_instructions: str | None = None,
     ) -> Generator[StreamChunk, None, None]:
         """Dịch nội dung bằng Claude, streaming response."""
         sys_prompt, user_prompt = self._build_translate_prompt(
-            content, target_lang, source_lang, domain, style, context, glossary
+            content, target_lang, source_lang, domain, style, context,
+            glossary, translation_instructions
         )
         yield from self._stream_messages(sys_prompt, user_prompt)
 

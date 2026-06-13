@@ -74,11 +74,19 @@ def mock_provider_classes():
     mock_providers = {}
     for name in ["gemini", "openai", "claude"]:
         mock_cls = MagicMock()
-        mock_instance = MagicMock()
-        mock_instance.name = name
-        mock_instance.model = f"{name}-default"
-        mock_instance.validate_key.return_value = True
-        mock_cls.return_value = mock_instance
+
+        def create_provider(
+            _api_key: str,
+            model: str | None = None,
+            provider_name: str = name,
+        ) -> MagicMock:
+            instance = MagicMock()
+            instance.name = provider_name
+            instance.model = model or f"{provider_name}-default"
+            instance.validate_key.return_value = True
+            return instance
+
+        mock_cls.side_effect = create_provider
         mock_providers[name] = mock_cls
 
     with patch.dict(
@@ -102,6 +110,7 @@ class TestLoadActiveProvider:
         assert result is True
         assert manager.provider is not None
         assert manager.provider_name == "gemini"
+        assert manager.provider.model == "gemini-3.1-flash-lite"
 
     def test_load_no_key(self, in_memory_db, mock_encryption, mock_provider_classes) -> None:
         # Xóa key của gemini
@@ -172,7 +181,9 @@ class TestValidateApiKey:
 
     def test_invalid_key(self, manager: ProviderManager, mock_provider_classes) -> None:
         # Mock validate_key trả về False
-        mock_provider_classes["openai"].return_value.validate_key.return_value = False
+        mock_provider_classes["openai"].side_effect = lambda *args, **kwargs: MagicMock(
+            validate_key=MagicMock(return_value=False)
+        )
         result = manager.validate_api_key("openai", "invalid-key")
         assert result is False
 
@@ -225,3 +236,25 @@ class TestTokenCounter:
 
     def test_has_token_counter(self, manager: ProviderManager) -> None:
         assert manager.token_counter is not None
+
+
+class TestTaskModelPolicy:
+    def test_summary_uses_configured_model(
+        self, manager: ProviderManager
+    ) -> None:
+        manager.load_active_provider()
+
+        provider = manager.get_provider("summary")
+
+        assert provider is not None
+        assert provider.model == "gemini-3.5-flash"
+
+    def test_qa_reuses_summary_provider(
+        self, manager: ProviderManager
+    ) -> None:
+        manager.load_active_provider()
+
+        summary_provider = manager.get_provider("summary")
+        qa_provider = manager.get_provider("qa")
+
+        assert qa_provider is summary_provider
