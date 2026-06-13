@@ -23,7 +23,7 @@ RELEASE_DATE = "13/06/2026"
 _FORMATS = "DOCX · XLSX · PPTX · TXT · MD · CSV · PNG · JPG · BMP · GIF"
 RELEASE_SUMMARY = (
     "Đây là phiên bản đầu tiên của LazyDoc. Các tính năng mới, cải tiến, "
-    "hiệu chỉnh và lỗi đã sửa trong những phiên bản tiếp theo sẽ được mô tả "
+    "và lỗi đã sửa trong những phiên bản tiếp theo sẽ được mô tả "
     "tại tab này."
 )
 
