@@ -38,6 +38,9 @@ class MockProvider(BaseProvider):
     def describe_image(self, image_data, prompt=None):
         yield StreamChunk(text="Image description", is_final=True)
 
+    def describe_images_batch(self, images, prompt=None):
+        yield StreamChunk(text="Batch description", is_final=True)
+
     def validate_key(self):
         return True
 

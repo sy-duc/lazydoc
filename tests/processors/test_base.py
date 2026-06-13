@@ -129,7 +129,7 @@ class TestFileProcessor:
 
     def test_extract_valid_file(self, tmp_path: Path) -> None:
         test_file = tmp_path / "file.dummy"
-        test_file.write_text("nội dung test")
+        test_file.write_text("nội dung test", encoding="utf-8")
         processor = DummyProcessor()
         result = processor.extract(test_file)
         assert result.file_name == "file.dummy"
