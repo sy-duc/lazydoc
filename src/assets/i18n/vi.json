@@ -61,7 +61,7 @@
     "style_concise": "Súc tích",
     "style_literary": "Bay bổng",
     "additional_instructions": "Hướng dẫn bổ sung",
-    "additional_instructions_description": "Nêu các yêu cầu hoặc ràng buộc cụ thể mà bản dịch và tài liệu đầu ra cần tuân theo.",
+    "additional_instructions_description": "Mô tả các yêu cầu hoặc ràng buộc cụ thể mà bản dịch cần tuân theo...",
     "mode": "Chế độ dịch",
     "mode_default": "Mặc định (offline)",
     "mode_smart": "Thông minh (AI)",
