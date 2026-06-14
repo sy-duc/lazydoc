@@ -1,5 +1,7 @@
 """TitleBar — Thanh tiêu đề tùy chỉnh."""
 
+import webbrowser
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPainter, QPen, QColor
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
@@ -87,6 +89,12 @@ class TitleBar(QWidget):
 
         layout.addStretch()
 
+        self._update_btn = QPushButton()
+        self._update_btn.setObjectName("updateBadge")
+        self._update_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._update_btn.setVisible(False)
+        layout.addWidget(self._update_btn)
+
         self._minimize_btn = MinimizeButton()
         self._minimize_btn.setToolTip("Thu nhỏ")
         self._minimize_btn.clicked.connect(self.minimize_clicked.emit)
@@ -110,4 +118,27 @@ class TitleBar(QWidget):
                 font-size: 14px;
                 font-weight: bold;
             }}
+            #updateBadge {{
+                background-color: {theme.GREEN};
+                color: {theme.BG_BASE};
+                border: none;
+                border-radius: 4px;
+                padding: 2px 10px;
+                font-size: 11px;
+                font-weight: bold;
+                margin-right: 8px;
+            }}
+            #updateBadge:hover {{ background-color: {theme.TEAL}; }}
         """)
+
+    def show_update_badge(self, version: str, url: str) -> None:
+        """Hiện badge thông báo có phiên bản mới.
+
+        Args:
+            version: Chuỗi version mới, ví dụ "1.1.0".
+            url: URL trang GitHub Release để mở khi click.
+        """
+        self._update_btn.setText(f"↑ v{version}")
+        self._update_btn.setToolTip(f"Có phiên bản mới v{version} — click để tải")
+        self._update_btn.clicked.connect(lambda: webbrowser.open(url))
+        self._update_btn.setVisible(True)

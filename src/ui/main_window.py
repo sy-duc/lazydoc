@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 
 from src.core.i18n import I18nManager
 from src.core.logging_config import safe_file_label, sanitize_error
+from src.core.updater import UpdateChecker
 from src.ui import theme
 from src.ui.dialogs.message_dialog import MessageDialog
 from src.modules.extract import ExtractModule
@@ -73,6 +74,7 @@ class MainWindow(QWidget):
         self._setup_provider_connections()
         self._setup_style()
         self.setAcceptDrops(True)
+        self._start_update_check()
 
     def _setup_window(self) -> None:
         """Cấu hình cửa sổ chính."""
@@ -169,6 +171,14 @@ class MainWindow(QWidget):
     def _setup_provider_connections(self) -> None:
         """Kết nối ProviderManager với UI."""
         pass
+
+    def _start_update_check(self) -> None:
+        """Khởi động kiểm tra phiên bản mới trong background."""
+        self._update_checker = UpdateChecker(self)
+        self._update_checker.update_available.connect(
+            lambda ver, url: self._title_bar.show_update_badge(ver, url)
+        )
+        self._update_checker.start()
 
     # --- Drag & Drop ---
 

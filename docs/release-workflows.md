@@ -66,12 +66,13 @@ Khuyến nghị quản lý cấu hình build bằng file `LazyDoc.spec`. Nếu c
 spec, có thể build thử bằng lệnh:
 
 ```powershell
-pyinstaller `
+python -m PyInstaller `
   --noconfirm `
   --clean `
   --windowed `
   --name LazyDoc `
   --icon favicon.ico `
+  --collect-submodules src.writers `
   --add-data "config\config.yaml;config" `
   --add-data "src\assets;src\assets" `
   --add-data "favicon.ico;." `
@@ -245,58 +246,54 @@ Trên máy test:
 5. Xác nhận dữ liệu và cấu hình cũ vẫn còn.
 6. Kiểm tra đầy đủ các chức năng chính.
 
-### Bước 4: Tạo checksum
+### Bước 4: Phát hành trên GitHub Releases
 
-Tạo SHA-256 cho installer:
+Yêu cầu: đã cài [GitHub CLI](https://cli.github.com/) và đã đăng nhập bằng `gh auth login`.
 
-```powershell
-Get-FileHash .\dist-installer\LazyDocSetup-1.2.0.exe -Algorithm SHA256
+#### 4a. Commit và push source code
+
+```cmd
+git add .
+git commit -m "release: v1.2.0"
+git push origin <branch>
 ```
 
-Lưu checksum vào release notes để người dùng hoặc auto-updater có thể xác
-minh file tải về.
+#### 4b. Tạo release và upload installer trong một lệnh
 
-### Bước 5: Phát hành trên GitHub Releases
-
-1. Push source code và tag phiên bản:
-
-```powershell
-git tag v1.2.0
-git push origin v1.2.0
+```cmd
+gh release create v1.2.0 dist-installer\LazyDocSetup-1.2.0.exe --title "LazyDoc v1.2.0"
 ```
 
-2. Tạo GitHub Release từ tag `v1.2.0`.
-3. Ghi release notes: tính năng mới, lỗi đã sửa và lưu ý nâng cấp.
-4. Upload `LazyDocSetup-1.2.0.exe`.
-5. Công bố release.
+Lệnh này sẽ hỏi lần lượt:
 
-URL tải dự kiến:
+| Câu hỏi | Trả lời |
+|---|---|
+| Tag name | `v1.2.0` |
+| Title | `LazyDoc v1.2.0` |
+| Release notes | `Leave blank` (có thể edit sau trên web) |
+| Is this a prerelease? | `No` |
+| Submit? | `Publish release` |
+
+GitHub tự động tạo tag `v1.2.0` trên commit hiện tại.
+
+#### 4c. Nếu đã tạo release trước, upload file sau
+
+```cmd
+gh release upload v1.2.0 dist-installer\LazyDocSetup-1.2.0.exe
+```
+
+#### 4d. Xác nhận
+
+Vào trang release kiểm tra file đã có trong Assets:
 
 ```text
-https://github.com/<owner>/<repo>/releases/download/v1.2.0/LazyDocSetup-1.2.0.exe
+https://github.com/sy-duc/lazydoc/releases/tag/v1.2.0
 ```
 
-### Bước 6: Cập nhật thông tin auto-update
-
-Nếu LazyDoc có auto-update, cập nhật manifest tại một URL cố định:
-
-```json
-{
-  "version": "1.2.0",
-  "download_url": "https://github.com/<owner>/<repo>/releases/download/v1.2.0/LazyDocSetup-1.2.0.exe",
-  "sha256": "<SHA-256-CUA-FILE-INSTALLER>",
-  "release_notes_url": "https://github.com/<owner>/<repo>/releases/tag/v1.2.0"
-}
-```
-
-Thứ tự an toàn:
-
-1. Upload installer và công bố GitHub Release.
-2. Kiểm tra URL tải hoạt động.
-3. Cập nhật manifest auto-update sau cùng.
-
-Không cập nhật manifest trước khi installer sẵn sàng, vì app cũ có thể phát
-hiện phiên bản mới nhưng không tải được file.
+Assets bao gồm:
+- `LazyDocSetup-1.2.0.exe` — file bạn upload, dành cho người dùng tải về cài đặt
+- `Source code (zip/tar.gz)` — GitHub tự tạo, dành cho developer
+- SHA256 — checksum tự động, người dùng dùng để xác minh file toàn vẹn
 
 ## Checklist phát hành nhanh
 
@@ -308,7 +305,5 @@ hiện phiên bản mới nhưng không tải được file.
 - [ ] Inno Setup dùng đúng version và giữ nguyên `AppId`.
 - [ ] Installer cài mới thành công.
 - [ ] Installer nâng cấp từ bản cũ mà không mất dữ liệu.
-- [ ] SHA-256 đã được tạo.
 - [ ] Git tag và GitHub Release đã được tạo.
 - [ ] Installer đã được upload và tải thử thành công.
-- [ ] Manifest auto-update đã được cập nhật sau cùng.
