@@ -22,9 +22,9 @@ RELEASE_DATE = "13/06/2026"
 
 _FORMATS = "DOCX · XLSX · PPTX · TXT · MD · CSV · PNG · JPG · BMP · GIF"
 RELEASE_SUMMARY = (
-    "Đây là phiên bản đầu tiên của LazyDoc. Các tính năng mới, cải tiến, "
-    "và lỗi đã sửa trong những phiên bản tiếp theo sẽ được mô tả "
-    "tại tab này."
+    "Đây là phiên bản đầu tiên của LazyDoc. Các cải tiến, sửa lỗi "
+    "và tính năng mới trong những phiên bản tiếp theo sẽ được mô tả "
+    "tại đây."
 )
 
 
@@ -108,13 +108,12 @@ class AboutDialog(QDialog):
         tab_layout.setSpacing(8)
 
         tab_layout.addWidget(self._section_title(
-            "file-document-multiple-outline", theme.MAUVE, "Tổng hợp thông minh"
+            "file-document-multiple-outline", theme.MAUVE, "Tổng hợp tài liệu"
         ))
         for text in (
             "Phân tích đa định dạng trong cùng một lần xử lý",
             "Trích xuất thông tin quan trọng, tóm tắt có cấu trúc",
-            "Báo cáo chi tiết dạng HTML có thể tải về",
-            "Hỏi đáp (Q&A) ngay trên nội dung vừa tổng hợp",
+            "Báo cáo chi tiết dạng HTML trực quan",
         ):
             tab_layout.addWidget(self._feature_row("check", theme.GREEN, text))
 
@@ -125,10 +124,9 @@ class AboutDialog(QDialog):
             "translate", theme.BLUE, "Dịch thuật linh hoạt"
         ))
         for text in (
-            "Offline (miễn phí) hoặc AI (chất lượng cao) - tùy chọn",
-            "Giữ nguyên định dạng file gốc sau khi dịch",
-            "Tự động dùng ngữ cảnh từ kết quả tổng hợp",
-            "Bảng thuật ngữ tùy chỉnh, hỗ trợ import/export",
+            "Tùy chọn offline (miễn phí) hoặc AI (có ngữ cảnh)",
+            "Giữ nguyên định dạng file gốc, dịch xong dùng luôn",
+            "Bảng thuật ngữ tùy chỉnh, hỗ trợ import/export dễ dàng chia sẻ",
         ):
             tab_layout.addWidget(self._feature_row("check", theme.GREEN, text))
 

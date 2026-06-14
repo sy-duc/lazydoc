@@ -48,7 +48,7 @@ _HTML_START = _tab_html(f"""
 <p>Chọn một trong các nhà cung cấp AI sau và tạo API key miễn phí:</p>
 <ul style="margin-top:4px; padding-left:20px;">
   <li style="margin-bottom:6px;">
-    <b>Google Gemini</b> — Miễn phí, quota hào phóng<br>
+    <b>Google Gemini</b> — Tiết kiệm, quota hào phóng<br>
     <a style="color:{_LINK};" href="https://aistudio.google.com/apikey">
       https://aistudio.google.com/apikey
     </a>
@@ -98,13 +98,12 @@ câu hỏi nào về nội dung tài liệu.</p>
 <ul style="padding-left:20px; margin-top:4px;">
   <li style="margin-bottom:4px;">AI trả lời dựa trên <b>toàn bộ nội dung</b> đã tổng hợp</li>
   <li style="margin-bottom:4px;">Hỗ trợ nhiều lượt hỏi liên tiếp — AI nhớ ngữ cảnh hội thoại</li>
-  <li style="margin-bottom:4px;">Khi tải báo cáo Chi tiết, toàn bộ Q&amp;A sẽ được đính kèm vào file HTML</li>
 </ul>
 
 <h3 style="color:{_H3}; margin-top:16px; margin-bottom:4px;">Lưu ý</h3>
 <ul style="padding-left:20px; margin-top:4px;">
   <li style="margin-bottom:4px;">Cần cấu hình AI Provider trước khi sử dụng tính năng này</li>
-  <li style="margin-bottom:4px;">File hình ảnh (PNG, JPG…) được phân tích bằng AI vision — cần provider hỗ trợ</li>
+  <li style="margin-bottom:4px;">File hình ảnh (PNG, JPG…) được phân tích bằng AI vision</li>
   <li style="margin-bottom:4px;">Có thể tổng hợp nhiều file cùng lúc — AI sẽ so sánh và liên kết thông tin</li>
 </ul>
 """)
@@ -125,6 +124,7 @@ thư mục <b>Downloads</b>, giữ nguyên định dạng gốc.</p>
         • Không cần internet<br>
         • Hoàn toàn miễn phí<br>
         • Tốc độ nhanh<br>
+        • Chất lượng dịch chưa cao<br>
         • Phù hợp văn bản thông thường
       </span>
     </td>
@@ -161,7 +161,7 @@ thuật ngữ chuyên ngành nhất quán hơn.</p>
 <ul style="padding-left:20px; margin-top:4px;">
   <li style="margin-bottom:4px;"><b>Lĩnh vực</b>: IT, Y tế, Pháp lý, Tài chính… → AI dùng văn phong đúng ngành</li>
   <li style="margin-bottom:4px;"><b>Văn phong</b>: Báo cáo, Ngắn gọn, Văn học… → điều chỉnh tone dịch</li>
-  <li style="margin-bottom:4px;"><b>Hướng dẫn bổ sung</b>: nêu các ràng buộc riêng như giữ nguyên tên field, API hoặc định dạng đầu ra</li>
+  <li style="margin-bottom:4px;"><b>Hướng dẫn bổ sung</b>: mô tả các yêu cầu hoặc ràng buộc cụ thể mà bản dịch cần tuân theo trong từng bối cảnh cụ thể</li>
 </ul>
 """)
 
