@@ -6,8 +6,13 @@ from pathlib import Path
 
 # Thêm thư mục gốc dự án vào sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-APP_ICON_PATH = PROJECT_ROOT / "favicon.ico"
 sys.path.insert(0, str(PROJECT_ROOT))
+
+# Trong PyInstaller bundle, sys._MEIPASS trỏ đến thư mục chứa bundled resources
+if getattr(sys, "frozen", False):
+    APP_ICON_PATH = Path(sys._MEIPASS) / "favicon.ico"
+else:
+    APP_ICON_PATH = PROJECT_ROOT / "favicon.ico"
 
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
@@ -55,8 +60,10 @@ def main() -> None:
 
     # Khởi chạy giao diện
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon(str(APP_ICON_PATH)))
+    icon = QIcon(str(APP_ICON_PATH))
+    app.setWindowIcon(icon)
     window = MainWindow(provider_manager=provider_manager)
+    window.setWindowIcon(icon)
     window.show()
     logger.info("LazyDoc khởi động hoàn tất.")
     sys.exit(app.exec())
